@@ -1,7 +1,11 @@
 import unittest
-from main import *
+from Instrument import *
 import os, pty
 import paho.mqtt.publish as publish
+from SerialEmulator import *
+import time
+
+logging.basicConfig(filename='instrument_tests.log', level=logging.INFO)
 
 def helper_publish(topic, message):
     publish.single(
@@ -41,18 +45,21 @@ class InstrumentTest(unittest.TestCase):
             mqtt_lost_messages_retry_time = MQTT_SEND_LOST_TIME,
         )
 
+        self.serial = SerialEmulator()
+        self.instrument._serial = self.serial
+
+    def testModuleReading(self):
+        self.assertTrue(False, 'message')
 
 
     def testModuleOperationStaticAction(self):
-        ser, master = helper_create_serial()
-        self.instrument._serial = ser
         test_module = IModule(name = 'test_module')
         self.instrument.add_module(test_module)
         self.instrument.start()
 
         topic = self.instrument.uuid + '/modules/'+ test_module.name
 
-        tests = 100
+        tests = 10
 
         for i in range(tests):
             # Action sent by MQTT
@@ -64,15 +71,15 @@ class InstrumentTest(unittest.TestCase):
             # Publish MQTT message with the action
             helper_publish(topic, action)
             # Get Serial log
-            reading = os.read(master,1000000)
+            time.sleep(.005)
+            serial_log = self.serial._receivedData
             # Assert that an action sent by MQTT executed the right serial action
-            self.assertEqual(reading, serial_action)
+            self.assertEqual(serial_log, serial_action)
+            self.serial._receivedData = ""
 
         self.instrument.stop()
 
     def testModuleOperationDynamicAction(self):
-        ser, master = helper_create_serial()
-        self.instrument._serial = ser
         test_module = IModule(name = 'test_module')
         self.instrument.add_module(test_module)
         self.instrument.start()
@@ -90,9 +97,11 @@ class InstrumentTest(unittest.TestCase):
             # Format {id}/modules/{action_name}={value}
             helper_publish(topic, action_name + '=' + str(i))
             # Get Serial log
-            reading = os.read(master,1000000)
+            time.sleep(.005)
+            serial_log = self.serial._receivedData
             # Assert that an action sent by MQTT executed the right serial action
-            self.assertEqual(reading, helper_serial_action(i))
+            self.assertEqual(serial_log, helper_serial_action(i))
+            self.serial._receivedData = ""
 
 
         self.instrument.stop()
