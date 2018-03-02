@@ -2,3 +2,4 @@ paho.mqtt.python/
 __pycache__/
 *.db
 SampleData.txt
+*.pyc

@@ -17,31 +17,36 @@ class Message(BaseModel):
         database = db
 
 class IModule(object):
-    def __init__(self, name, port):
+    def __init__(self, name):
         super(IModule, self).__init__()
         self.name = name
-        self.port = port
+        self.serial = None
 
     def set_action(self, action_name, serial_action):
+        # When setting a user function, the return value must be in string format
         setattr(self, action_name, serial_action)
 
+    # TODO
+    # Not working
     def set_actions(self, actions):
-        map(set_action, actions)
+        map(self.set_action, actions)
 
     def run_action(self, action):
+        if not self.serial:
+            raise ValueError('Serial is not set!')
+
+        # Action format: 'on' or 'example=67'
         commands = action.split('=')
         not_found = ValueError("Command not found: " + action)
         try:
             if hasattr(self, commands[0]):
                 if len(commands) == 2:
                     value = int(commands[1])
-                    print("Recieved command: "+ commands[0] + ' ' + commands[1])
-                    print(getattr(self, commands[0])(value))
-                    # self.port.write(getattr(self, commands[0])(value))
+                    # print("Recieved command: "+ commands[0] + ' ' + commands[1])
+                    self.serial.write(getattr(self, commands[0])(value))
                 elif len(commands) == 1:
-                    print("Recieved command: "+ commands[0])
-                    print(getattr(self, action))
-                    # self.port.write(getattr(self, action))
+                    # print("Recieved command: "+ commands[0] )
+                    self.serial.write(getattr(self, action))
                 else:
                     raise not_found
 

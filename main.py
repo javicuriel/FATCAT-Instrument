@@ -5,7 +5,8 @@ import paho.mqtt.client as mqtt
 import time
 from models import *
 from uuid import getnode as get_mac
-
+import serial
+import serial.tools.list_ports
 
 # Port 1883 not encrypted
 # Quality of service = 1, meaning the server must receive the message at least once
@@ -18,6 +19,14 @@ MQTT_SEND_LOST_TIME = 2
 
 MQTT_TYPE_READING = 'reading'
 MQTT_TYPE_MODULE = 'modules'
+
+SERIAL_PORT_DESCRIPTION = 'nano-TD'
+SERIAL_BAUDRATE = 115200,
+SERIAL_PARITY = serial.PARITY_NONE,
+SERIAL_STOPBITS = serial.STOPBITS_ONE,
+SERIAL_BYTESIZE = serial.EIGHTBITS,
+SERIAL_TIMEOUT = 1
+
 
 
 class Instrument(object):
@@ -33,15 +42,22 @@ class Instrument(object):
         self.mqtt_lost_messages_retry_time = kwargs.get('mqtt_lost_messages_retry_time')
         self.mqtt_publish_topic = ''
 
+        self.serial_port_description = kwargs.get('serial_port_description')
+        self.serial_baudrate = kwargs.get('serial_baudrate')
+        self.serial_parity = kwargs.get('serial_parity')
+        self.serial_stopbits = kwargs.get('serial_stopbits')
+        self.serial_bytesize = kwargs.get('serial_bytesize')
+        self.serial_timeout = kwargs.get('serial_timeout')
+
         self._mqtt_connected = False
         self._mqtt_messages_lost = 0
         self._mqtt_clean_session = False
         self._mqtt_retain = False
-        self._mqtt_actions = {}
 
 
         self._mqtt_client = self._setup_mqtt_client()
-
+        # self._serial = self._set_up_serial()
+        self._serial = None
         self._imodules = {}
 
 
@@ -62,10 +78,39 @@ class Instrument(object):
 
         return client
 
+    def _lookup_port(self):
+        ports = serial.tools.list_ports.comports()
+        for port in ports:
+            return port if self.serial_port_description in port else None
+
+    def _set_up_serial(self):
+        # Waits 2 seconds before trying again if no port found
+        # and doubles time each try with maximum 32 second waiting time
+        port = self._lookup_port()
+        wait = 2
+
+        while not port:
+             print("No TCA found, waiting " + str(wait) + " seconds...")
+             time.sleep(wait)
+             if wait < 32:
+                 wait = wait*2
+             port = self._lookup_port()
+
+        print("Serial port found: " + port.device)
+        return serial.Serial(
+            port = port.device,
+            baudrate = self.serial_baudrate,
+            parity = self.serial_parity,
+            stopbits = self.serial_stopbits,
+            bytesize = self.serial_bytesize,
+            timeout = self.serial_timeout
+        )
+
     def add_module(self, imodule):
         if imodule.name in self._imodules.keys():
             raise ValueError(imodule.name + ' already exists! Modules cannot have the same name.')
 
+        imodule.serial = self._serial
         self._imodules[imodule.name] = imodule
 
     def set_callbacks(self):
@@ -78,18 +123,12 @@ class Instrument(object):
         module_name = message.topic.split('/')[2]
         self._imodules[module_name].run_action(str(message.payload))
 
-
-
-    def testPrint(self, p, qos):
-        print("Topic: "+ p + " QoS: "+ str(qos))
-
     def _mqtt_on_connect(self, *args, **kwargs):
         # Set _mqtt_connected flag to true
         self._mqtt_connected = True
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
-        map(lambda imodule: self.testPrint(self._create_topic(imodule, MQTT_TYPE_MODULE), self.mqtt_qos), self._imodules)
         map(lambda imodule: self._mqtt_client.subscribe(self._create_topic(imodule, MQTT_TYPE_MODULE), self.mqtt_qos), self._imodules)
 
     def _mqtt_on_disconnect(self, *args, **kwargs):
@@ -131,7 +170,6 @@ class Instrument(object):
     @mqtt_publish_topic.setter
     def mqtt_publish_topic(self, value):
         self._mqtt_publish_topic = self._create_topic(value, MQTT_TYPE_READING)
-        # self._mqtt_publish_topic = self._add_uuid(value)
 
 
     def start(self):
@@ -141,7 +179,11 @@ class Instrument(object):
             self._mqtt_messages_lost = Message.select().where(Message.sent == False).count()
         self.set_callbacks()
         self._mqtt_client.loop_start()
-        self.read_from_file()
+        # self.read_from_file()
+
+    def stop(self):
+        self._mqtt_client.loop_stop()
+        self._serial.close()
 
     def read_from_file(self):
         datafile = "SampleData.txt"
@@ -152,8 +194,8 @@ class Instrument(object):
             end = time.time()
             if (end - start) > self.mqtt_lost_messages_retry_time:
                 start = time.time()
-
                 self._mqtt_send_lost_messages()
+
             datastring = line.rstrip('\n')
             msg = Message(topic = self.mqtt_publish_topic, payload = datastring)
             self._mqtt_messages_lost += 1 if not self._mqtt_publish(msg) else 0
@@ -163,44 +205,40 @@ class Instrument(object):
         client.loop_stop()
 
 
-def togglePump(self):
-    # find out which serial port is connected
-    ser = open_tca_port()
-    if self.statusVarsData.pump[-1]:
-        ser.write('U0000')
-    else:
-        ser.write('U1000')
-    ser.close()
-
-def toggle(imodule):
-    # find out which serial port is connected
-    ser = imodule.port
-    if self.statusVarsData.pump[-1]:
-        ser.write(imodule.off)
-    else:
-        ser.write(imodule.on)
-    ser.close()
-
-def set_valuex(value):
-    return "entro" + str(value)
-
-def test(value):
-    print(value)
 
 
-pump = IModule(name = 'pump', port = 'test_port')
 
-pump.set_action('on', 'U1000')
-pump.set_action('off', 'U0000')
-pump.set_action('set_value', set_valuex)
-
-instrument = Instrument(
-    mqtt_host = MQTT_SERVER,
-    mqtt_port = MQTT_PORT,
-    mqtt_keep_alive = MQTT_KEEPALIVE,
-    mqtt_qos = MQTT_QOS,
-    mqtt_lost_messages_retry_time = MQTT_SEND_LOST_TIME,
-)
-instrument.add_module(pump)
-
-instrument.start()
+# pump = IModule(name = 'pump')
+#
+# pump.set_action('on', 'U1000')
+# pump.set_action('off', 'U0000')
+# pump.set_action('set_value', set_valuex)
+#
+#
+#
+#
+# instrument = Instrument(
+#     mqtt_host = MQTT_SERVER,
+#     mqtt_port = MQTT_PORT,
+#     mqtt_keep_alive = MQTT_KEEPALIVE,
+#     mqtt_qos = MQTT_QOS,
+#     mqtt_lost_messages_retry_time = MQTT_SEND_LOST_TIME,
+#
+#     serial_port_description = SERIAL_PORT_DESCRIPTION,
+#     serial_baudrate = SERIAL_BAUDRATE,
+#     serial_parity = SERIAL_PARITY,
+#     serial_stopbits = SERIAL_STOPBITS,
+#     serial_bytesize = SERIAL_BYTESIZE,
+#     serial_timeout = SERIAL_TIMEOUT
+#
+# )
+#
+# instrument.add_module(pump)
+#
+# import os, pty
+# master, slave = pty.openpty()
+# s_name = os.ttyname(slave)
+# ser = serial.Serial(s_name)
+# instrument._serial = ser
+#
+# instrument.start()
