@@ -1,5 +1,6 @@
 # from peewee import *
 import peewee as pw
+import logging
 
 db = pw.SqliteDatabase('local_store.db')
 
@@ -33,28 +34,31 @@ class IModule(object):
 
     def run_action(self, action):
         if not self.serial:
-            raise ValueError('Serial is not set!')
+            e = 'Serial is not set for Module:'+ self.name +'!'
+            logging.critical(e)
+            raise ValueError(e)
 
         # Action format: 'on' or 'example=67'
         commands = action.split('=')
-        not_found = ValueError("Command not found: " + action)
+        e = "Module:"+self.name +" Command not found:" + action
+        not_found = ValueError(e)
         try:
             if hasattr(self, commands[0]):
                 if len(commands) == 2:
                     value = int(commands[1])
-                    # print("Recieved command: "+ commands[0] + ' ' + commands[1])
                     self.serial.write(getattr(self, commands[0])(value))
+                    # logging.info("Wrote serial command:"+ commands[0] + '=' + commands[1])
                 elif len(commands) == 1:
-                    # print("Recieved command: "+ commands[0] )
                     self.serial.write(getattr(self, action))
+                    # logging.info("Wrote serial command:"+ commands[0] )
                 else:
                     raise not_found
-
                 return True
-
             else:
                 raise not_found
         except Exception as e:
+            # if e == not_found:
+                # logging.error(action + ' not found for module '+ self.name + '!')
             return False
 
     def __eq__(self, other):
