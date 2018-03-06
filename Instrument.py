@@ -2,6 +2,7 @@
 # Created by Javier Curiel
 # Copyright (c) 2018 Javier Curiel. All rights reserved.
 
+from Models import Topic
 from Models import Message
 from Models import IModule
 from uuid import getnode as get_mac
@@ -11,26 +12,12 @@ import serial.tools.list_ports
 import time, os, psutil, datetime
 import logging
 
-# Port 1883 not encrypted
-# Quality of service = 1, meaning the server must receive the message at least once
-MQTT_SERVER = 'localhost'
-MQTT_QOS = 1
-MQTT_PORT = 1883
-MQTT_KEEPALIVE = 60
-MQTT_CLEAN_SESSION = False
 
 MQTT_TYPE_READING = 'reading'
 MQTT_TYPE_MODULE = 'modules'
 
-SERIAL_PORT_DESCRIPTION = 'nano-TD'
-SERIAL_BAUDRATE = 115200,
-SERIAL_PARITY = serial.PARITY_NONE,
-SERIAL_STOPBITS = serial.STOPBITS_ONE,
-SERIAL_BYTESIZE = serial.EIGHTBITS,
-SERIAL_TIMEOUT = 1
-
-LOG_FORMAT = '%(asctime)s [%(levelname)s] %(instrument_uuid)s - %(module_name)s :: %(message)s '
-DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
+Topic.create_table(True)
+Message.create_table(True)
 
 # logging.getLogger('instrument').addHandler(logging.NullHandler())
 # logging.basicConfig(format=LOG_FORMAT,datefmt=DATE_FORMAT, filename='instrument.log', level=logging.DEBUG)
@@ -40,7 +27,7 @@ class Instrument(object):
 
     # __slots__ = 'uuid','mqtt_host','mqtt_port','mqtt_keep_alive','mqtt_qos','_mqtt_publish_topic','serial_port_description','serial_baudrate','serial_parity','serial_stopbits','serial_bytesize','serial_timeout','_mqtt_connected','_mqtt_clean_session','_mqtt_retain','_mqtt_messages_lost','_mqtt_client','_serial','_imodules','date_format'
 
-    def __init__(self, date_format = DATE_FORMAT, *args, **kwargs ):
+    def __init__(self, date_format = '%Y-%m-%d %H:%M:%S', *args, **kwargs ):
         super(Instrument, self).__init__()
         self.uuid = str(get_mac())
 
@@ -61,6 +48,7 @@ class Instrument(object):
         self._mqtt_clean_session = False
         self._mqtt_retain = False
         self._mqtt_messages_lost = False
+        self._mqtt_resend_from_db = True
 
         self._mqtt_client = self._setup_mqtt_client()
         # self._serial = self._set_up_serial()
@@ -68,6 +56,7 @@ class Instrument(object):
         self._imodules = {}
 
         self.date_format = date_format
+        self.log_format = '%(asctime)s [%(levelname)s] %(instrument_uuid)s - %(module_name)s :: %(message)s'
 
         # self._log_extra = {'instrument_uuid': self.uuid, 'module_name': ''}
         # self._logger = logging.getLogger('instrument')
@@ -75,6 +64,7 @@ class Instrument(object):
 
 
     def _setup_mqtt_client(self):
+        # Creates MQTT client
         client = mqtt.Client(
             client_id = self.uuid,
             clean_session = self._mqtt_clean_session
@@ -86,12 +76,13 @@ class Instrument(object):
             keepalive = self.mqtt_keep_alive
         )
 
+        # Sets callback functions for message arrival
         client.on_connect = self._mqtt_on_connect
         client.on_disconnect = self._mqtt_on_disconnect
 
         # Callback is global because client will only subscribe to current modules
         all_module_topics = self._create_topic(topic_type = MQTT_TYPE_MODULE, value = '#')
-        client.message_callback_add(all_module_topics, self._on_module_action)
+        client.message_callback_add(all_module_topics, self._on_module_message)
 
         return client
 
@@ -120,13 +111,14 @@ class Instrument(object):
         )
 
     def _lookup_port(self):
+        # Looks for and returns port with description
         ports = serial.tools.list_ports.comports()
         for port in ports:
             return port if self.serial_port_description in port else None
 
 
-    def _on_module_action(self, client, userdata, message):
-        # Topic structure
+    def _on_module_message(self, client, userdata, message):
+        # Topic format
         # {id}/modules/{module_name}/{action}
         module_name = message.topic.split('/')[2]
         try:
@@ -137,6 +129,7 @@ class Instrument(object):
             # self._logger('Action done:' +str(message.payload))
 
     def read_data(self):
+        # Read data from serial
         if not self._serial:
             raise ValueError('Serial is not set!')
 
@@ -151,24 +144,30 @@ class Instrument(object):
         for imodule in self._imodules:
             self._mqtt_client.subscribe(self._create_topic(topic_type = MQTT_TYPE_MODULE, value=imodule), self.mqtt_qos)
 
+
     def _mqtt_on_disconnect(self, *args, **kwargs):
         # Set _mqtt_connected flag to false
         self._mqtt_connected = False
 
     def _mqtt_send_crash_messages(self):
-        messages = Message.select().where(Message.sent == False)
-        for msg in messages:
-            self._mqtt_publish(msg)
+        # Run aplication on start up, resends messages not recieved
+        if self._mqtt_resend_from_db:
+            print("Entro")
+            messages = Message.select().where(Message.sent == False)
+            for msg in messages:
+                self._mqtt_publish(msg)
+            self._mqtt_resend_from_db = False
 
     def _mqtt_send_lost_messages(self):
         # If client is connected and a message was lost then send all messages that where not received
         if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
             Message.update({Message.sent: True}).where(Message.sent == False).execute()
             self._mqtt_messages_lost = False
+        self._mqtt_send_crash_messages()
 
     def _mqtt_publish(self, msg):
         # Publish the message to the server and store result in msg_info
-        msg_info = self._mqtt_client.publish(msg.topic,msg.timestamp +'\t'+ msg.payload, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        msg_info = self._mqtt_client.publish(msg.topic.value, str(msg.timestamp) +'\t'+ msg.payload, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
         # If sent is successful, set sent flag to true
         if msg_info.rc == mqtt.MQTT_ERR_SUCCESS:
@@ -183,6 +182,11 @@ class Instrument(object):
         return msg.sent
 
     def _create_topic(self, topic_type, value = ''):
+        # Creates topic with format:
+        # {id}/{topic_type}/{value}
+
+        # TODO
+        # Return actual Topic
         topic = self.uuid + '/' + topic_type
         if value:
             topic += '/' + value
@@ -194,8 +198,8 @@ class Instrument(object):
 
     @mqtt_publish_topic.setter
     def mqtt_publish_topic(self, value):
-        self._mqtt_publish_topic = self._create_topic(topic_type = MQTT_TYPE_READING)
-
+        self._mqtt_publish_topic,_ = Topic.get_or_create(value = self._create_topic(topic_type = MQTT_TYPE_READING))
+        self._mqtt_publish_topic.save()
 
     def add_module(self, imodule):
         if imodule.name in self._imodules.keys():
@@ -206,18 +210,15 @@ class Instrument(object):
 
 
     def start(self, test = False):
-        if self.mqtt_qos > 0:
-            # Create database if none exists
-            Message.create_table(True)
-
+        # Starts async MQTT client, sends lost messages when connected and starts reading data
         self._mqtt_client.loop_start()
-        while not self._mqtt_connected:pass
-        self._mqtt_send_crash_messages()
+        # while not self._mqtt_connected:pass
+        # self._mqtt_send_crash_messages()
         if not test:
             self.start_reader()
 
     def _get_timestamp(self):
-        # Change date format to user set format
+        # Return timestamp with user set format
         return datetime.datetime.now().strftime(self.date_format)
 
     def start_reader(self):
@@ -232,7 +233,7 @@ class Instrument(object):
                 mb = process.memory_info().rss/1000000
                 start = time.time()
             try:
-                # print(str(mb) + ' mb ' + str(len(self._mqtt_client._out_messages)))
+                print(str(mb) + ' mb ' + str(len(self._mqtt_client._out_messages)))
                 # os.system( 'clear' )
                 self._mqtt_send_lost_messages()
                 data = self.read_data()

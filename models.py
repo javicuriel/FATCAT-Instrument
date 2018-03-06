@@ -11,11 +11,15 @@ class BaseModel(pw.Model):
     class Meta:
         database = db
 
+class Topic(BaseModel):
+    value = pw.CharField()
+
 class Message(BaseModel):
-    topic = pw.CharField()
+    topic = pw.ForeignKeyField(Topic)
     payload = pw.CharField()
     sent = pw.BooleanField(default = False)
     timestamp = pw.DateTimeField(default=datetime.datetime.now)
+
 
 
 class IModule(object):

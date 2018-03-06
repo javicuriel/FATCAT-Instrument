@@ -5,6 +5,18 @@ import paho.mqtt.publish as publish
 from SerialEmulator import *
 import time
 
+MQTT_SERVER = 'localhost'
+MQTT_QOS = 1
+MQTT_PORT = 1883
+MQTT_KEEPALIVE = 60
+MQTT_CLEAN_SESSION = False
+
+SERIAL_PORT_DESCRIPTION = 'nano-TD'
+SERIAL_BAUDRATE = 115200,
+SERIAL_PARITY = serial.PARITY_NONE,
+SERIAL_STOPBITS = serial.STOPBITS_ONE,
+SERIAL_BYTESIZE = serial.EIGHTBITS,
+SERIAL_TIMEOUT = 1
 
 def helper_publish(topic, message):
     publish.single(
@@ -26,6 +38,12 @@ def helper_publish(topic, message):
 
 def helper_serial_action(value):
     return str(int(value) + 10)
+
+class MqttMessageEmulator(object):
+    def __init__(self, topic, payload):
+        self.topic = topic
+        self.payload = payload
+
 
 class ModuleTest(unittest.TestCase):
     def setUp(self):
@@ -68,8 +86,43 @@ class InstrumentTest(unittest.TestCase):
         # New reading must show on next serial read
         self.assertNotEqual(serial_read, module_read)
 
-
     def testModuleOperationStaticAction(self):
+        test_module = IModule(name = 'test_module')
+        action, serial_action = 'action', 'serial_action'
+        test_module.set_action(action, serial_action)
+
+        self.instrument.add_module(test_module)
+        self.instrument.start(test = True)
+
+        topic = self.instrument.uuid + '/modules/'+ test_module.name
+        mqtt_msg = MqttMessageEmulator(topic, action)
+
+        # Called when mqtt message is recieved
+        self.instrument._on_module_message(None, None, mqtt_msg)
+        serial_log = self.serial._receivedData
+        # Assert that serial recieved corresponding action
+        self.assertEqual(serial_log, serial_action)
+
+    def testModuleOperationDynamicAction(self):
+        test_module = IModule(name = 'test_module')
+        action, value ,serial_action = 'action', 50 ,helper_serial_action
+        test_module.set_action(action, serial_action)
+
+        self.instrument.add_module(test_module)
+        self.instrument.start(test = True)
+
+        topic = self.instrument.uuid + '/modules/'+ test_module.name
+        mqtt_msg = MqttMessageEmulator(topic, action +'='+ str(value))
+
+        # Called when mqtt message is recieved
+        self.instrument._on_module_message(None, None, mqtt_msg)
+        serial_log = self.serial._receivedData
+        # Assert that serial recieved corresponding action
+        # self.assertEqual(serial_log, serial_action)
+        self.assertEqual(serial_log, helper_serial_action(value))
+
+    # Functional testing
+    def _testModuleOperationStaticAction(self):
         test_module = IModule(name = 'test_module')
         self.instrument.add_module(test_module)
         self.instrument.start(test = True)
@@ -96,7 +149,8 @@ class InstrumentTest(unittest.TestCase):
 
         self.instrument.stop()
 
-    def testModuleOperationDynamicAction(self):
+    # Functional testing
+    def _testModuleOperationDynamicAction(self):
         test_module = IModule(name = 'test_module')
         self.instrument.add_module(test_module)
         self.instrument.start(test = True)

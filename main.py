@@ -7,13 +7,15 @@ config_file = 'config.ini'
 def main():
     ser = SerialEmulator()
 
+    # If there is config file, create instrument with config file settings
     if os.path.exists(config_file):
         instrument = get_instrument_config_file(ser)
         instrument.start()
+        
 
 
 
-
+# Sets up instrument with config file settings
 def get_instrument_config_file(ser):
     config = configparser.ConfigParser()
     config.read(config_file)
@@ -34,6 +36,7 @@ def get_instrument_config_file(ser):
     set_modules_config_file(config, instrument)
     return instrument
 
+# Sets up instrument's modules with config file settings
 def set_modules_config_file(config, instrument):
     for key in config['MODULES']:
         module = IModule(name = key)
