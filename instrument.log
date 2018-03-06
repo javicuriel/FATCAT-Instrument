@@ -1,2 +1,4 @@
-2018-03-02 18:51:31 [WARNING] 546435764 - pump :: me 
-2018-03-02 18:51:31 [WARNING] 546435764 - new_pump :: sd 
+DEBUG:peewee:('CREATE TABLE IF NOT EXISTS "message" ("id" INTEGER NOT NULL PRIMARY KEY, "topic" VARCHAR(255) NOT NULL, "payload" VARCHAR(255) NOT NULL, "sent" INTEGER NOT NULL, "timestamp" DATETIME NOT NULL)', [])
+DEBUG:peewee:('SELECT "t1"."id", "t1"."topic", "t1"."payload", "t1"."sent", "t1"."timestamp" FROM "message" AS "t1" WHERE ("t1"."sent" = ?)', [False])
+DEBUG:peewee:('CREATE TABLE IF NOT EXISTS "message" ("id" INTEGER NOT NULL PRIMARY KEY, "topic" VARCHAR(255) NOT NULL, "payload" VARCHAR(255) NOT NULL, "sent" INTEGER NOT NULL, "timestamp" DATETIME NOT NULL)', [])
+DEBUG:peewee:('SELECT "t1"."id", "t1"."topic", "t1"."payload", "t1"."sent", "t1"."timestamp" FROM "message" AS "t1" WHERE ("t1"."sent" = ?)', [False])

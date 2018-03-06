@@ -5,7 +5,6 @@ import paho.mqtt.publish as publish
 from SerialEmulator import *
 import time
 
-logging.basicConfig(filename='instrument_tests.log', level=logging.INFO)
 
 def helper_publish(topic, message):
     publish.single(
@@ -24,14 +23,29 @@ def helper_publish(topic, message):
         transport="tcp"
     )
 
-def helper_create_serial():
-    master, slave = pty.openpty()
-    s_name = os.ttyname(slave)
-    ser = serial.Serial(s_name)
-    return ser, master
 
 def helper_serial_action(value):
-    return str(value + 10)
+    return str(int(value) + 10)
+
+class ModuleTest(unittest.TestCase):
+    def setUp(self):
+        self.name = 'ModuleTest'
+        self.test_module = IModule(name = self.name)
+        self.test_action = 'test_on'
+        self.test_serial_action = 'test_serial_on'
+        self.test_module.set_action(self.test_action, self.test_serial_action)
+        self.serial = SerialEmulator()
+        self.test_module.serial = self.serial
+
+    def testAction(self):
+        self.test_module.run_action(self.test_action)
+        serial_log = self.serial._receivedData
+        self.assertEqual(serial_log, self.test_serial_action)
+
+    def testActionNoSerial(self):
+        self.test_module.serial = None
+        self.assertRaises(ValueError, self.test_module.run_action,self.test_action)
+
 
 class InstrumentTest(unittest.TestCase):
     def setUp(self):
@@ -47,9 +61,16 @@ class InstrumentTest(unittest.TestCase):
 
         self.serial = SerialEmulator()
         self.instrument._serial = self.serial
+        self.test_messages = 1
 
     def testModuleReading(self):
         self.assertTrue(False, 'message')
+
+    def testRead(self):
+        module_read = self.instrument.read_data()
+        serial_read = self.serial.readline()
+        # New reading must show on next serial read
+        self.assertNotEqual(serial_read, module_read)
 
 
     def testModuleOperationStaticAction(self):
@@ -57,11 +78,10 @@ class InstrumentTest(unittest.TestCase):
         self.instrument.add_module(test_module)
         self.instrument.start()
 
+        # Helper topic
         topic = self.instrument.uuid + '/modules/'+ test_module.name
 
-        tests = 10
-
-        for i in range(tests):
+        for i in range(self.test_messages):
             # Action sent by MQTT
             action = str(i)
             # Serial Action that should be executed with MQTT action
@@ -71,6 +91,7 @@ class InstrumentTest(unittest.TestCase):
             # Publish MQTT message with the action
             helper_publish(topic, action)
             # Get Serial log
+            # Wait to MQTT message arrive
             time.sleep(.005)
             serial_log = self.serial._receivedData
             # Assert that an action sent by MQTT executed the right serial action
@@ -86,9 +107,7 @@ class InstrumentTest(unittest.TestCase):
 
         topic = self.instrument.uuid + '/modules/'+ test_module.name
 
-        tests = 10
-
-        for i in range(tests):
+        for i in range(self.test_messages):
             # Action sent by MQTT
             action_name = 'value'
             # Add operable action to module (Custom user function)
@@ -97,6 +116,7 @@ class InstrumentTest(unittest.TestCase):
             # Format {id}/modules/{action_name}={value}
             helper_publish(topic, action_name + '=' + str(i))
             # Get Serial log
+            # Wait to MQTT message arrive
             time.sleep(.005)
             serial_log = self.serial._receivedData
             # Assert that an action sent by MQTT executed the right serial action

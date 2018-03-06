@@ -22,7 +22,11 @@ class SerialEmulator:
         self.rtscts   = rtscts
         self._isOpen  = True
         self._receivedData = ""
-        self._data = "It was the best of times.\nIt was the worst of times.\n"
+        # self._data = "It was the best of times.\nIt was the worst of times.\n"
+
+        fi = open("SampleData.txt", "r")
+        self._data = fi.read()
+
 
     ## isOpen()
     # returns True if the port to the Arduino is open.  False otherwise
@@ -60,6 +64,8 @@ class SerialEmulator:
         returnIndex = self._data.index( "\n" )
         if returnIndex != -1:
             s = self._data[0:returnIndex+1]
+            # Remove timestamp
+            s = s.split('\t', 1)[-1]
             self._data = self._data[returnIndex+1:]
             return s
         else:

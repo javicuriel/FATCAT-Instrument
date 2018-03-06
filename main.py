@@ -1,11 +1,9 @@
-import os, pty, time
+import os, pty, time, psutil
 from Instrument import *
+from SerialEmulator import *
+import datetime
 
 def main():
-    pump = IModule(name = 'pump')
-
-    pump.set_action('on', 'U1000')
-    pump.set_action('off', 'U0000')
 
     instrument = Instrument(
         mqtt_host = MQTT_SERVER,
@@ -22,12 +20,26 @@ def main():
         serial_timeout = SERIAL_TIMEOUT
 
     )
-    ser, master = helper_create_serial()
+    ser = SerialEmulator()
     instrument._serial = ser
-    instrument.add_module(pump)
+
+    pump = IModule(name = 'pump')
+
+    pump.set_action('on', 'U1000')
+    pump.set_action('off', 'U0000')
+
+    pump = IModule(name = 'pump').set_actions({'on':'U1000','off':'U1000'})
+    # instrument.add_module(pump)
+    # instrument.add_module(reader)
+    instrument.add_module(IModule(name = 'pump').set_actions({'on':'U1000','off':'U1000'}))
+    instrument.add_module(IModule(name = 'res').set_actions({'on':'U1000','off':'U1000'}))
+
+
     instrument.start()
-    pump.run_action('os')
-    instrument.stop()
+
+
+    # pump.run_action('os')
+    # instrument.stop()
     # DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
     # t = 'jsj'
     #
@@ -41,10 +53,5 @@ def main():
     # extra['module_name'] = 'new_pump'
     # logger.warning('sd')
 
-def helper_create_serial():
-    master, slave = pty.openpty()
-    s_name = os.ttyname(slave)
-    ser = serial.Serial(s_name)
-    return ser, master
 
 main()
