@@ -152,7 +152,6 @@ class Instrument(object):
     def _mqtt_send_crash_messages(self):
         # Run aplication on start up, resends messages not recieved
         if self._mqtt_resend_from_db:
-            print("Entro")
             messages = Message.select().where(Message.sent == False)
             for msg in messages:
                 self._mqtt_publish(msg)
@@ -163,7 +162,7 @@ class Instrument(object):
         if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
             Message.update({Message.sent: True}).where(Message.sent == False).execute()
             self._mqtt_messages_lost = False
-        self._mqtt_send_crash_messages()
+            self._mqtt_send_crash_messages()
 
     def _mqtt_publish(self, msg):
         # Publish the message to the server and store result in msg_info
@@ -212,8 +211,7 @@ class Instrument(object):
     def start(self, test = False):
         # Starts async MQTT client, sends lost messages when connected and starts reading data
         self._mqtt_client.loop_start()
-        # while not self._mqtt_connected:pass
-        # self._mqtt_send_crash_messages()
+        self._mqtt_send_crash_messages()
         if not test:
             self.start_reader()
 
