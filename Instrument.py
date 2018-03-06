@@ -18,7 +18,6 @@ MQTT_QOS = 1
 MQTT_PORT = 1883
 MQTT_KEEPALIVE = 60
 MQTT_CLEAN_SESSION = False
-MQTT_SEND_LOST_TIME = 2
 
 MQTT_TYPE_READING = 'reading'
 MQTT_TYPE_MODULE = 'modules'
@@ -39,7 +38,7 @@ DATE_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 class Instrument(object):
 
-    # __slots__ = 'uuid','mqtt_host','mqtt_port','mqtt_keep_alive','mqtt_qos','mqtt_lost_messages_retry_time','_mqtt_publish_topic','serial_port_description','serial_baudrate','serial_parity','serial_stopbits','serial_bytesize','serial_timeout','_mqtt_connected','_mqtt_clean_session','_mqtt_retain','_mqtt_messages_lost','_mqtt_client','_serial','_imodules','date_format'
+    # __slots__ = 'uuid','mqtt_host','mqtt_port','mqtt_keep_alive','mqtt_qos','_mqtt_publish_topic','serial_port_description','serial_baudrate','serial_parity','serial_stopbits','serial_bytesize','serial_timeout','_mqtt_connected','_mqtt_clean_session','_mqtt_retain','_mqtt_messages_lost','_mqtt_client','_serial','_imodules','date_format'
 
     def __init__(self, date_format = DATE_FORMAT, *args, **kwargs ):
         super(Instrument, self).__init__()
@@ -49,7 +48,6 @@ class Instrument(object):
         self.mqtt_port = kwargs.get('mqtt_port')
         self.mqtt_keep_alive = kwargs.get('mqtt_keep_alive')
         self.mqtt_qos = kwargs.get('mqtt_qos')
-        self.mqtt_lost_messages_retry_time = kwargs.get('mqtt_lost_messages_retry_time')
         self.mqtt_publish_topic = ''
 
         self.serial_port_description = kwargs.get('serial_port_description')
@@ -207,7 +205,7 @@ class Instrument(object):
         self._imodules[imodule.name] = imodule
 
 
-    def start(self):
+    def start(self, test = False):
         if self.mqtt_qos > 0:
             # Create database if none exists
             Message.create_table(True)
@@ -215,7 +213,8 @@ class Instrument(object):
         self._mqtt_client.loop_start()
         while not self._mqtt_connected:pass
         self._mqtt_send_crash_messages()
-        # self.start_reader()
+        if not test:
+            self.start_reader()
 
     def _get_timestamp(self):
         # Change date format to user set format
@@ -223,13 +222,13 @@ class Instrument(object):
 
     def start_reader(self):
         process = psutil.Process(os.getpid())
-
+        print("Started reader")
         wait = 0.25
         start = time.time()
         while(True):
             end = time.time()
             mb = process.memory_info().rss/1000000
-            if (end - start) > self.mqtt_lost_messages_retry_time:
+            if (end - start) > 2:
                 mb = process.memory_info().rss/1000000
                 start = time.time()
             try:

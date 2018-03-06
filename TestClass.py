@@ -56,15 +56,11 @@ class InstrumentTest(unittest.TestCase):
             mqtt_port = MQTT_PORT,
             mqtt_keep_alive = MQTT_KEEPALIVE,
             mqtt_qos = MQTT_QOS,
-            mqtt_lost_messages_retry_time = MQTT_SEND_LOST_TIME,
         )
 
         self.serial = SerialEmulator()
         self.instrument._serial = self.serial
         self.test_messages = 1
-
-    def testModuleReading(self):
-        self.assertTrue(False, 'message')
 
     def testRead(self):
         module_read = self.instrument.read_data()
@@ -76,7 +72,7 @@ class InstrumentTest(unittest.TestCase):
     def testModuleOperationStaticAction(self):
         test_module = IModule(name = 'test_module')
         self.instrument.add_module(test_module)
-        self.instrument.start()
+        self.instrument.start(test = True)
 
         # Helper topic
         topic = self.instrument.uuid + '/modules/'+ test_module.name
@@ -103,7 +99,7 @@ class InstrumentTest(unittest.TestCase):
     def testModuleOperationDynamicAction(self):
         test_module = IModule(name = 'test_module')
         self.instrument.add_module(test_module)
-        self.instrument.start()
+        self.instrument.start(test = True)
 
         topic = self.instrument.uuid + '/modules/'+ test_module.name
 
