@@ -81,8 +81,8 @@ class Instrument(object):
         client.on_disconnect = self._mqtt_on_disconnect
 
         # Callback is global because client will only subscribe to current modules
-        all_module_topics = self._create_topic(topic_type = MQTT_TYPE_MODULE, value = '#')
-        client.message_callback_add(all_module_topics, self._on_module_message)
+        all_module_topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t = '#')
+        client.message_callback_add(all_module_topic.value, self._on_module_message)
 
         return client
 
@@ -142,7 +142,8 @@ class Instrument(object):
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
         for imodule in self._imodules:
-            self._mqtt_client.subscribe(self._create_topic(topic_type = MQTT_TYPE_MODULE, value=imodule), self.mqtt_qos)
+            topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t=imodule)
+            self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
 
 
     def _mqtt_on_disconnect(self, *args, **kwargs):
@@ -180,15 +181,13 @@ class Instrument(object):
 
         return msg.sent
 
-    def _create_topic(self, topic_type, value = ''):
+    def _create_topic(self, topic_type, t = ''):
         # Creates topic with format:
-        # {id}/{topic_type}/{value}
-
-        # TODO
-        # Return actual Topic
-        topic = self.uuid + '/' + topic_type
-        if value:
-            topic += '/' + value
+        # {id}/{topic_type}/{val}
+        final_value = self.uuid + '/' + topic_type
+        if t:
+            final_value += '/' + t
+        topic, _ = Topic.get_or_create(value = final_value)
         return topic
 
     @property
@@ -197,8 +196,7 @@ class Instrument(object):
 
     @mqtt_publish_topic.setter
     def mqtt_publish_topic(self, value):
-        self._mqtt_publish_topic,_ = Topic.get_or_create(value = self._create_topic(topic_type = MQTT_TYPE_READING))
-        self._mqtt_publish_topic.save()
+        self._mqtt_publish_topic = self._create_topic(topic_type = MQTT_TYPE_READING)
 
     def add_module(self, imodule):
         if imodule.name in self._imodules.keys():
@@ -207,12 +205,15 @@ class Instrument(object):
         imodule.serial = self._serial
         self._imodules[imodule.name] = imodule
 
+    def get_module(self, name):
+        return self._imodules[name]
 
     def start(self, test = False):
         # Starts async MQTT client, sends lost messages when connected and starts reading data
         self._mqtt_client.loop_start()
         self._mqtt_send_crash_messages()
         if not test:
+            print("Starting reader...")
             self.start_reader()
 
     def _get_timestamp(self):
@@ -221,7 +222,6 @@ class Instrument(object):
 
     def start_reader(self):
         process = psutil.Process(os.getpid())
-        print("Started reader")
         wait = 0.25
         start = time.time()
         while(True):
@@ -242,6 +242,18 @@ class Instrument(object):
             except Exception as e:
                 print(e)
             time.sleep(wait)
+
+    def start_reader_final(self):
+        while(True):
+            try:
+                self._mqtt_send_lost_messages()
+                data = self.read_data()
+                timestamp = self._get_timestamp()
+                message = Message(topic = self.mqtt_publish_topic, payload = data, timestamp = timestamp)
+                self._mqtt_publish(message)
+            except Exception as e:
+                print(e)
+                time.sleep(5)
 
     def stop(self):
         self._mqtt_client.loop_stop()

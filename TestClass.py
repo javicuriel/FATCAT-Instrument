@@ -103,9 +103,10 @@ class InstrumentTest(unittest.TestCase):
         # Assert that serial recieved corresponding action
         self.assertEqual(serial_log, serial_action)
 
-    def testModuleOperationDynamicAction(self):
+    def testModuleOperationRangeAction(self):
         test_module = IModule(name = 'test_module')
-        action, value ,serial_action = 'action', 50 ,helper_serial_action
+        action, serial_action = 'action', 'SA0000-SA0600'
+        value = 100
         test_module.set_action(action, serial_action)
 
         self.instrument.add_module(test_module)
@@ -119,7 +120,8 @@ class InstrumentTest(unittest.TestCase):
         serial_log = self.serial._receivedData
         # Assert that serial recieved corresponding action
         # self.assertEqual(serial_log, serial_action)
-        self.assertEqual(serial_log, helper_serial_action(value))
+        self.assertEqual(serial_log, 'SA0'+str(value))
+
 
     # Functional testing
     def _testModuleOperationStaticAction(self):

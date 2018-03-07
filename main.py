@@ -5,20 +5,18 @@ import os.path, configparser
 config_file = 'config.ini'
 
 def main():
-    ser = SerialEmulator()
-
     # If there is config file, create instrument with config file settings
     if os.path.exists(config_file):
-        instrument = get_instrument_config_file(ser)
+        instrument = get_instrument_config_file()
         instrument.start()
-        
 
 
 
 # Sets up instrument with config file settings
-def get_instrument_config_file(ser):
+def get_instrument_config_file():
     config = configparser.ConfigParser()
     config.read(config_file)
+    ser = SerialEmulator()
     instrument = Instrument(
         mqtt_host = eval(config['MQTT_SETTINGS']['MQTT_SERVER']),
         mqtt_port = eval(config['MQTT_SETTINGS']['MQTT_PORT']),
