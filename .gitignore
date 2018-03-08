@@ -3,4 +3,5 @@ __pycache__/
 *.db
 SampleData.txt
 *.pyc
+*.pyo
 *.log
