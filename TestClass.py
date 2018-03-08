@@ -81,7 +81,7 @@ class InstrumentTest(unittest.TestCase):
         self.test_messages = 1
 
     def testRead(self):
-        module_read = self.instrument.read_data()
+        module_read = self.instrument._read_data()
         serial_read = self.serial.readline()
         # New reading must show on next serial read
         self.assertNotEqual(serial_read, module_read)

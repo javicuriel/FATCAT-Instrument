@@ -1,7 +1,7 @@
 # D. Thiebaut
 # A very crude simulator for PySerial assuming it
 # is emulating an Arduino.
-
+import time
 
 # a Serial class emulator
 class SerialEmulator:
@@ -48,6 +48,7 @@ class SerialEmulator:
     def write( self, string ):
         # print( 'Arduino got: "' + string + '"' )
         self._receivedData = string
+        print(self._receivedData)
 
     ## read()
     # reads n characters from the fake Arduino. Actually n characters
@@ -61,6 +62,7 @@ class SerialEmulator:
     ## readline()
     # reads characters from the fake Arduino until a \n is found.
     def readline( self ):
+        time.sleep(0.25)
         returnIndex = self._data.index( "\n" )
         if returnIndex != -1:
             s = self._data[0:returnIndex+1]

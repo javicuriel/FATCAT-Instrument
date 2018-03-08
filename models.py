@@ -33,11 +33,10 @@ class IModule(object):
     def set_action(self, action_name, serial_action):
         # When setting a user function, the return value must be in string format
         # setattr(self, action_name, serial_action)
-        self.actions[action_name] = self.get_serial_action(serial_action)
+        self.actions[action_name] = self._get_serial_action(serial_action)
 
     def set_actions(self, actions):
         self.actions = actions
-        return self
 
     def _get_action(self, message):
         # Action format: 'example' or 'example=67'
@@ -47,9 +46,10 @@ class IModule(object):
         elif len(commands) == 1:
             return commands[0], None
         else:
-            raise ValueError("Module:"+self.name +" Command format is invalid:" + message)
+            raise ValueError("Command format is invalid:" + message)
 
-    def set_value(self, a, b, value):
+    def set_value(self, actions, value):
+        a, b = actions
         serial_action = range_a = range_b = ''
         for i, char in enumerate(a):
             if a[i] != b[i]:
@@ -57,32 +57,33 @@ class IModule(object):
                 range_a = a[i:]
                 range_b = b[i:]
                 break
-
-        if not serial_action or int(range_a) > int(range_b) or len(range_a) != len(range_b):
-            raise ValueError("Module:"+self.name +" invalid range format: " + a + "-"+ b)
-
         if int(value) >= int(range_a) and int(value) <= int(range_b):
             extra_zeros = len(a) - len(serial_action + value)
             serial_action += '0' * extra_zeros
             serial_action += value
             return serial_action
-        else:
-            raise ValueError("Module:"+self.name +" value is out of range: " + value)
+        raise ValueError("Value is out of range: " + value)
+
+    def _check_range(self, serial_action):
+        a, b = serial_action
+        return a < b and len(a) == len(b) and a != b
 
 
-
-    def get_serial_action(self, serial_action):
-        serial_action = serial_action.split('-')
+    def _get_serial_action(self, serial_action_string):
+        serial_action = serial_action_string.split('-')
+        e = ValueError("Module:"+self.name +" serial action format is invalid:" + serial_action_string)
         if len(serial_action) == 2:
-            return lambda value: self.set_value(a = serial_action[0], b = serial_action[1], value = value)
+            if not self._check_range(serial_action):
+                raise e
+            return lambda value: self.set_value(serial_action, value = value)
         elif len(serial_action) == 1:
             return serial_action[0]
         else:
-            raise ValueError("Module:"+self.name +" serial action format is invalid:" + serial_action)
+            raise e
 
     def run_action(self, message):
         if not self.serial:
-            raise ValueError('Serial is not set for Module:'+ self.name +'!')
+            raise ValueError('Serial is not set!')
 
         action, value = self._get_action(message)
 
@@ -95,7 +96,7 @@ class IModule(object):
                 return True
             except:
                 raise
-        raise ValueError("Module:"+self.name +" Command not found:" + action)
+        raise ValueError("Command not found:" + action)
 
 
     def __eq__(self, other):

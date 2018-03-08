@@ -1,19 +1,22 @@
 from Instrument import *
 from SerialEmulator import *
-import os.path, configparser
+import os.path, configparser, argparse
 
 config_file = 'config.ini'
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--debug", help="Sets intrument to DEBUG mode",action="store_true")
+    args = parser.parse_args()
     # If there is config file, create instrument with config file settings
     if os.path.exists(config_file):
-        instrument = get_instrument_config_file()
+        instrument = get_instrument_config_file(args.debug)
         instrument.start()
 
 
 
 # Sets up instrument with config file settings
-def get_instrument_config_file():
+def get_instrument_config_file(debug):
     config = configparser.ConfigParser()
     config.read(config_file)
     ser = SerialEmulator()
@@ -28,7 +31,9 @@ def get_instrument_config_file():
         serial_parity = eval(config['SERIAL_SETTINGS']['SERIAL_PARITY']),
         serial_stopbits = eval(config['SERIAL_SETTINGS']['SERIAL_STOPBITS']),
         serial_bytesize = eval(config['SERIAL_SETTINGS']['SERIAL_BYTESIZE']),
-        serial_timeout = eval(config['SERIAL_SETTINGS']['SERIAL_TIMEOUT'])
+        serial_timeout = eval(config['SERIAL_SETTINGS']['SERIAL_TIMEOUT']),
+
+        debug = debug
     )
     instrument._serial = ser
     set_modules_config_file(config, instrument)
