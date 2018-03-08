@@ -48,7 +48,6 @@ class SerialEmulator:
     def write( self, string ):
         # print( 'Arduino got: "' + string + '"' )
         self._receivedData = string
-        print(self._receivedData)
 
     ## read()
     # reads n characters from the fake Arduino. Actually n characters

@@ -80,7 +80,7 @@ class Instrument(object):
         level = logging.INFO
         if debug:
             level = logging.DEBUG
-            
+
         logger = logging.getLogger(self.name)
         logger.setLevel(level)
 
@@ -168,8 +168,8 @@ class Instrument(object):
         module_name = message.topic.split('/')[2]
         self.log_message(module = module_name, msg = "MQTT Message: "+ str(message.payload), level = logging.DEBUG)
         try:
-            self._imodules[module_name].run_action(str(message.payload))
-            status = str(message.payload) + " executed successfuly."
+            serial_action = self._imodules[module_name].run_action(str(message.payload))
+            status = str(message.payload) + " executed the command " + serial_action + " successfuly."
             level = logging.INFO
         except Exception as e:
             status = str(e)
@@ -306,6 +306,9 @@ class Instrument(object):
                 timestamp = self._get_timestamp()
                 message = Message(topic = self.mqtt_publish_topic, payload = data, timestamp = timestamp)
                 self._mqtt_publish(message)
+            except KeyboardInterrupt:
+                self.stop()
+                break
             except Exception as e:
                 status = str(e)
                 self.log_message(module = MQTT_TYPE_READING, msg = status, level = logging.ERROR)
@@ -325,4 +328,6 @@ class Instrument(object):
 
     def stop(self):
         self._mqtt_client.loop_stop()
+        self.log_message(module = 'MQTTClient', msg = "stopped")
         self._serial.close()
+        self.log_message(module = 'Serial', msg = "closed")
