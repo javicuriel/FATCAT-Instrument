@@ -13,6 +13,9 @@ import time, os, psutil, datetime
 import logging
 import sys
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+
 
 MQTT_TYPE_READING = 'reading'
 MQTT_TYPE_MODULE = 'modules'
@@ -20,6 +23,11 @@ MQTT_TYPE_STATUS = 'status'
 
 Topic.create_table(True)
 Message.create_table(True)
+
+SingletonInstrument = None
+
+def run_event(event_name):
+    SingletonInstrument.run_event(event_name)
 
 
 class InstrumentLogHandler(object):
@@ -29,22 +37,22 @@ class InstrumentLogHandler(object):
         self._topic = topic
 
     def write(self, string):
-        sys.stderr.write(string)
+        sys.stdout.write(string)
         if self.instrument._mqtt_connected and self.instrument._log_info['send_mqtt']:
             self.instrument._mqtt_client.publish(topic = self._topic.value, payload = string, qos = self.instrument.mqtt_qos, retain = self.instrument._mqtt_retain)
 
     def flush(self):
-        sys.stderr.flush()
+        sys.stdout.flush()
 
 
 class Instrument(object):
 
     # __slots__ = 'uuid','mqtt_host','mqtt_port','mqtt_keep_alive','mqtt_qos','_mqtt_publish_topic','serial_port_description','serial_baudrate','serial_parity','serial_stopbits','serial_bytesize','serial_timeout','_mqtt_connected','_mqtt_clean_session','_mqtt_retain','_mqtt_messages_lost','_mqtt_client','_serial','_imodules','date_format'
 
-    def __init__(self, date_format = '%Y-%m-%d %H:%M:%S', debug = False, *args, **kwargs ):
+    def __init__(self, date_format = '%Y-%m-%d %H:%M:%S', *args, **kwargs ):
         super(Instrument, self).__init__()
         self.uuid = str(get_mac())
-        self.name = 'Instrument'
+        self.name = 'instrument'
 
         self.mqtt_host = kwargs.get('mqtt_host')
         self.mqtt_port = kwargs.get('mqtt_port')
@@ -74,27 +82,49 @@ class Instrument(object):
         self._log_format = '%(asctime)s [%(levelname)s] %(message)s'
         self._log_info = {}
 
-        self._logger = self._setup_logger(debug)
+        self._logger = self._setup_logger(self.name)
+        self.scheduler = self._set_up_scheduler()
 
-    def _setup_logger(self, debug):
-        level = logging.INFO
-        if debug:
-            level = logging.DEBUG
+        self._modes = {'ANALYSIS_MODE':None}
+        global SingletonInstrument
+        SingletonInstrument = self
 
-        logger = logging.getLogger(self.name)
-        logger.setLevel(level)
+
+    def _set_up_scheduler(self):
+
+        jobstores = {
+            'default': SQLAlchemyJobStore(url='sqlite:///jobs.db')
+        }
+        scheduler = BackgroundScheduler(jobstores = jobstores)
+        scheduler.name = 'apscheduler'
+        self._setup_logger(scheduler.name)
+
+        events = self.get_events()
+        for event_name, time in events:
+            scheduler.add_job(run_event, 'cron', second=time, name=event_name , id=event_name, replace_existing=True, coalesce= False, max_instances= 100, args = [event_name])
+
+        return scheduler
+
+    def _setup_logger(self, name):
+        logger = logging.getLogger(name)
+        # logger = logging.getLogger('apscheduler')
+
+        logger.setLevel(logging.INFO)
 
         topic = self._create_topic(topic_type = MQTT_TYPE_STATUS)
         mqtth = InstrumentLogHandler(topic, self)
         # create console handler and set level to debug
         instrument_log_handler = logging.StreamHandler(mqtth)
-        instrument_log_handler.setLevel(level)
-
         fileHandler = logging.FileHandler('{0}.log'.format(self.name))
 
 
         # create formatter
-        formatter = logging.Formatter(fmt = self._log_format, datefmt = self.date_format)
+        if name == 'apscheduler':
+            log_format = '%(asctime)s [%(levelname)s] - Module:scheduler :: %(message)s'
+        else:
+            log_format = self._log_format
+
+        formatter = logging.Formatter(fmt = log_format, datefmt = self.date_format)
 
         # add formatter to ch
         instrument_log_handler.setFormatter(formatter)
@@ -166,15 +196,9 @@ class Instrument(object):
         # Topic format
         # {id}/modules/{module_name} payload={action}
         module_name = message.topic.split('/')[2]
-        self.log_message(module = module_name, msg = "MQTT Message: "+ str(message.payload), level = logging.DEBUG)
-        try:
-            serial_action = self._imodules[module_name].run_action(str(message.payload))
-            status = str(message.payload) + " executed the command " + serial_action + " successfuly."
-            level = logging.INFO
-        except Exception as e:
-            status = str(e)
-            level = logging.ERROR
-        self.log_message(module = module_name, msg = status, level = level)
+        action = str(message.payload)
+        self.log_message(module = module_name, msg = "MQTT Message: "+ action, level = logging.DEBUG)
+        self.run_action(module_name, action)
 
     def _read_data(self):
         # Read data from serial
@@ -212,7 +236,7 @@ class Instrument(object):
         # Run aplication on start up, resends messages not recieved
         if self._mqtt_resend_from_db:
             messages = Message.select().where(Message.sent == False)
-            self.log_message(module = 'DB', msg = 'Resending '+ str(messages.count())+ ' messages')
+            self.log_message(module = 'database', msg = 'Resending '+ str(messages.count())+ ' messages')
             for msg in messages:
                 self._mqtt_publish(msg)
             self._mqtt_resend_from_db = False
@@ -275,32 +299,84 @@ class Instrument(object):
         self._imodules[imodule.name] = imodule
 
     def get_module(self, name):
+        # TODO
+        # Try (*maube)
         return self._imodules[name]
+
+    def get_mode(self, name):
+        print(name + " Started")
+
+    def get_events(self):
+        return []
+        # return [('event_test', '*/3')]
+
+    def run_event(self, name):
+        print("Running "+ name)
+
+    def run_mode(self, name):
+        actions = self._modes[name]
+        self.log_message(module = "instrument", msg = "Started mode: " + name)
+        for module, action in actions:
+            if not self.run_action(module, action):
+                return False
+        self.log_message(module = "instrument", msg = "Mode executed successfully: " + name)
+        return True
+
+    def set_mode(self, name, actions):
+        try:
+            tuple_actions = []
+            for action in actions:
+                m, a = action.split(':')
+                self._imodules[m].validate_action(a)
+                tuple_actions.append((m,a))
+            self._modes[name] = tuple_actions
+            status = "Mode saved successfully: "+ name
+            level = logging.INFO
+        except Exception as e:
+            status = str(e) + " :: Mode not added: " + name
+            level = logging.ERROR
+        self.log_message(module = "instrument", msg = status, level = level)
+
+
+
+    def run_action(self, module, action):
+        serial_action = None
+        try:
+            serial_action = self._imodules[module].run_action(action)
+            status = action + " executed the command " + serial_action + " successfuly."
+            level = logging.INFO
+        except Exception as e:
+            status = str(e)
+            level = logging.ERROR
+        self.log_message(module = module, msg = status, level = level)
+
+        return True if serial_action else False
+
+
+
 
     def start(self, test = False):
         # Starts async MQTT client, sends lost messages when connected and starts reading data
         self._mqtt_client.loop_start()
         self._mqtt_send_crash_messages()
+        self.scheduler.start()
+        self._memory_usage()
         if not test:
+            self.log_message(module = MQTT_TYPE_READING, msg = "Starting reader on topic = "+ self.mqtt_publish_topic.value)
             self.start_reader()
 
     def _get_timestamp(self):
         # Return timestamp with user set format
         return datetime.datetime.now().strftime(self.date_format)
 
-    def start_reader(self):
-        self.log_message(module = MQTT_TYPE_READING, msg = "Starting reader on topic = "+ self.mqtt_publish_topic.value)
-        start = time.time()
+    def _memory_usage(self):
         process = psutil.Process(os.getpid())
+        mb = process.memory_info().rss/1000000
+        self.log_message(module = 'memory', msg = str(mb)+ ' mb', level = logging.INFO)
+
+    def start_reader(self):
         while(True):
-            end = time.time()
-            mb = process.memory_info().rss/1000000
-            if (end - start) > 2:
-                mb = process.memory_info().rss/1000000
-                start = time.time()
             try:
-                # print(str(mb) + ' mb ' + str(len(self._mqtt_client._out_messages)))
-                # os.system( 'clear' )
                 self._mqtt_send_lost_messages()
                 data = self._read_data()
                 timestamp = self._get_timestamp()
@@ -310,24 +386,13 @@ class Instrument(object):
                 self.stop()
                 break
             except Exception as e:
-                status = str(e)
-                self.log_message(module = MQTT_TYPE_READING, msg = status, level = logging.ERROR)
-                time.sleep(10)
-
-    def start_reader_final(self):
-        while(True):
-            try:
-                self._mqtt_send_lost_messages()
-                data = self._read_data()
-                timestamp = self._get_timestamp()
-                message = Message(topic = self.mqtt_publish_topic, payload = data, timestamp = timestamp)
-                self._mqtt_publish(message)
-            except Exception as e:
-                print(e)
+                self.log_message(module = MQTT_TYPE_READING, msg = str(e), level = logging.ERROR)
+                self._memory_usage()
                 time.sleep(5)
 
     def stop(self):
         self._mqtt_client.loop_stop()
-        self.log_message(module = 'MQTTClient', msg = "stopped")
+        self.log_message(module = 'mqttclient', msg = "stopped")
         self._serial.close()
-        self.log_message(module = 'Serial', msg = "closed")
+        self.log_message(module = 'serial', msg = "closed")
+        self.scheduler.shutdown()

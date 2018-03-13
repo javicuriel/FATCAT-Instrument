@@ -79,6 +79,8 @@ class InstrumentTest(unittest.TestCase):
         self.serial = SerialEmulator()
         self.instrument._serial = self.serial
         self.test_messages = 1
+        self.instrument.scheduler.remove_jobstore('default')
+        self.instrument.scheduler.add_jobstore('sqlalchemy', url='sqlite:///TestJobs.db')
 
     def testRead(self):
         module_read = self.instrument._read_data()

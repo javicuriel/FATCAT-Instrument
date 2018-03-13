@@ -21,6 +21,14 @@ class Message(BaseModel):
     timestamp = pw.DateTimeField(default=datetime.datetime.now)
 
 
+# class Mode(object):
+#     def __init__(self, name, instrument):
+#         self.name = name
+#         self.instrument = instrument
+#
+#     def add_action():
+#     def del_action():
+#     def get_actions():
 
 class IModule(object):
     def __init__(self, name, is_reader = False):
@@ -37,6 +45,15 @@ class IModule(object):
 
     def set_actions(self, actions):
         self.actions = actions
+
+    def validate_action(self, action):
+        # TODO
+        # Check is value is valid within range
+        if action in self.actions:
+            return True
+        else:
+            raise ValueError("Invalid action: "+ action)
+
 
     def _get_action(self, message):
         # Action format: 'example' or 'example=67'
