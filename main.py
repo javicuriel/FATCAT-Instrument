@@ -29,6 +29,7 @@ def main():
 def otro_analisis():
     print("Otro analisis cada 6 segundos")
 
+
 def run_analysis():
     # ANALYSIS_MODE
     instrument.run_mode('analisis')

@@ -26,9 +26,15 @@ Message.create_table(True)
 
 SingletonInstrument = None
 
-def run_event(event_name):
-    SingletonInstrument.run_event(event_name)
+def run_job(event_name):
+    SingletonInstrument.run_job(event_name)
 
+def convert_to_seconds(value, unit):
+    seconds = 1
+    minutes = 60
+    hours = 3600
+    days = 86400
+    return value*eval(unit)
 
 class InstrumentLogHandler(object):
     def __init__(self, topic, instrument):
@@ -101,7 +107,7 @@ class Instrument(object):
 
         events = self.get_events()
         for event_name, time in events:
-            scheduler.add_job(run_event, 'cron', second=time, name=event_name , id=event_name, replace_existing=True, coalesce= False, max_instances= 100, args = [event_name])
+            scheduler.add_job(run_job, 'cron', second=time, name=event_name , id=event_name, replace_existing=True, coalesce= False, max_instances= 100, args = [event_name])
 
         return scheduler
 
@@ -310,8 +316,18 @@ class Instrument(object):
         return []
         # return [('event_test', '*/3')]
 
-    def run_event(self, name):
-        print("Running "+ name)
+    def run_job(self, name):
+        actions = self._jobs[name]
+
+        for action_type, action in actions:
+            if action_type == 'mode':
+                self.run_mode(action)
+            elif action_type == 'module':
+                self.run_action(action[0], action[1])
+            elif action_type == 'wait':
+                time.sleep(convert_to_seconds(int(action[0]),action[1]))
+            else:
+                raise ValueError("Invalid action type:" + action_type)
 
     def run_mode(self, name):
         actions = self._modes[name]
@@ -322,13 +338,22 @@ class Instrument(object):
         self.log_message(module = "instrument", msg = "Mode executed successfully: " + name)
         return True
 
+    def set_job(self, name, actions):
+        tuple_actions = self._get_tuple_actions(self, actions)
+        if tuple_actions:
+            self._jobs[name] = tuple_actions
+            status = "Job saved successfully: "+ name
+            level = logging.INFO
+        else:
+            status = "Job not added: " + name
+            level = logging.WARNING
+        self.log_message(module = "instrument", msg = status, level = level)
+
     def set_mode(self, name, actions):
         try:
-            tuple_actions = []
-            for action in actions:
-                m, a = action.split(':')
-                self._imodules[m].validate_action(a)
-                tuple_actions.append((m,a))
+            tuple_actions = self._get_tuple_actions(self, actions)
+            for module, action in actions:
+                self._imodules[module].validate_action(action)
             self._modes[name] = tuple_actions
             status = "Mode saved successfully: "+ name
             level = logging.INFO
@@ -337,6 +362,19 @@ class Instrument(object):
             level = logging.ERROR
         self.log_message(module = "instrument", msg = status, level = level)
 
+    def _get_tuple_actions(self, actions):
+        # Gets actions list and converts it to tuples list
+        tuple_actions = []
+        try:
+            for a in actions:
+                action = a.split(':')
+                if len(action) < 2 or len(action) > 3:
+                    raise ValueError("Invalid action format: " + action)
+                tuple_actions.append((action[0], action[1], action[2] if len(action) == 3 else None))
+        except Exception as e:
+            tuple_actions = None
+            self.log_message(module = "instrument", msg = str(e), level = logging.ERROR)
+        return tuple_actions
 
 
     def run_action(self, module, action):
