@@ -88,7 +88,8 @@ class Instrument(object):
         self._mqtt_clean_session = False
         self._mqtt_retain = False
         self._mqtt_messages_lost = False
-        self._mqtt_resend_from_db = True
+
+        # Depending on memory size this is approx 400 MB of memory
         self._mqtt_max_queue = 100000
 
         self._mqtt_client = self._setup_mqtt_client()
@@ -175,7 +176,7 @@ class Instrument(object):
         all_module_topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t = '#')
         client.message_callback_add(all_module_topic.value, self._on_module_message)
 
-        # client.max_queued_messages_set(self._mqtt_max_queue)
+        client.max_queued_messages_set(self._mqtt_max_queue)
         return client
 
 
@@ -250,22 +251,25 @@ class Instrument(object):
         self._mqtt_connected = False
         self.log_message(module = 'MQTTClient', msg = 'disconnected')
 
-    def _mqtt_send_crash_messages(self):
+    def _mqtt_resend_from_db(self):
         # Run aplication on start up, resends messages not recieved
-        if self._mqtt_resend_from_db:
-            messages = Message.select().where(Message.sent == False)
-            self.log_message(module = 'database', msg = 'Resending '+ str(messages.count())+ ' messages')
-            for msg in messages:
-                self._mqtt_publish(msg)
-            self._mqtt_resend_from_db = False
+        messages = Message.select().where(Message.sent == False)
+        self.log_message(module = 'database', msg = 'Resending '+ str(messages.count())+ ' messages')
+        for msg in messages:
+            self._mqtt_publish(msg)
 
     def _mqtt_send_lost_messages(self):
         # If client is connected and a message was lost then send all messages that where not received
         if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
-            count = Message.update({Message.sent: True}).where(Message.sent == False).execute()
+            count = Message.update({Message.sent: True}).where(Message.sent == False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).execute()
             self._mqtt_messages_lost = False
-            self.log_message(module = 'database', msg = 'Sent '+ str(count)+ ' messages')
+            self.log_message(module = 'database:memory', msg = 'Sent '+ str(count)+ ' messages')
             gc.collect()
+
+            if count >= self._mqtt_max_queue:
+                self._mqtt_resend_from_db()
+
+
 
 
     def _mqtt_publish(self, msg):
@@ -399,7 +403,7 @@ class Instrument(object):
     def start(self, test = False):
         # Starts async MQTT client, sends lost messages when connected and starts reading data
         self._mqtt_client.loop_start()
-        self._mqtt_send_crash_messages()
+        self._mqtt_resend_from_db()
         self.scheduler.start()
         if not test:
             self.log_message(module = MQTT_TYPE_READING, msg = "Starting reader on topic = "+ self.mqtt_publish_topic.value)

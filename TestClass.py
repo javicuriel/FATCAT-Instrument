@@ -104,6 +104,7 @@ class InstrumentTest(unittest.TestCase):
         serial_log = self.serial._receivedData
         # Assert that serial recieved corresponding action
         self.assertEqual(serial_log, serial_action)
+        self.instrument.stop()
 
     def testModuleOperationRangeAction(self):
         test_module = IModule(name = 'test_module')
@@ -123,7 +124,7 @@ class InstrumentTest(unittest.TestCase):
         # Assert that serial recieved corresponding action
         # self.assertEqual(serial_log, serial_action)
         self.assertEqual(serial_log, 'SA0'+str(value))
-
+        self.instrument.stop()
 
     # Functional testing
     def _testModuleOperationStaticAction(self):
