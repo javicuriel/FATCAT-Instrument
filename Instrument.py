@@ -12,6 +12,7 @@ import serial.tools.list_ports
 import time, os, psutil, datetime
 import logging
 import sys
+import gc
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -26,10 +27,18 @@ Message.create_table(True)
 
 SingletonInstrument = None
 
-def run_job(event_name):
-    SingletonInstrument.run_job(event_name)
+def memory_info():
+    SingletonInstrument._memory_usage()
 
-def convert_to_seconds(value, unit):
+def _run_job(event_name, actions):
+    # Helper function tu run a job
+    SingletonInstrument.run_actions(actions)
+
+def convert_to_seconds(unit, value):
+    """
+    Converts an number to seconds
+    ej. convert_to_seconds('minutes', 5) => 300
+    """
     seconds = 1
     minutes = 60
     hours = 3600
@@ -57,6 +66,8 @@ class Instrument(object):
 
     def __init__(self, date_format = '%Y-%m-%d %H:%M:%S', *args, **kwargs ):
         super(Instrument, self).__init__()
+        global SingletonInstrument
+
         self.uuid = str(get_mac())
         self.name = 'instrument'
 
@@ -78,6 +89,7 @@ class Instrument(object):
         self._mqtt_retain = False
         self._mqtt_messages_lost = False
         self._mqtt_resend_from_db = True
+        self._mqtt_max_queue = 100000
 
         self._mqtt_client = self._setup_mqtt_client()
         # self._serial = self._set_up_serial()
@@ -91,9 +103,9 @@ class Instrument(object):
         self._logger = self._setup_logger(self.name)
         self.scheduler = self._set_up_scheduler()
 
-        self._modes = {'ANALYSIS_MODE':None}
-        global SingletonInstrument
+        self._modes = {}
         SingletonInstrument = self
+
 
 
     def _set_up_scheduler(self):
@@ -105,10 +117,7 @@ class Instrument(object):
         scheduler.name = 'apscheduler'
         self._setup_logger(scheduler.name)
 
-        events = self.get_events()
-        for event_name, time in events:
-            scheduler.add_job(run_job, 'cron', second=time, name=event_name , id=event_name, replace_existing=True, coalesce= False, max_instances= 100, args = [event_name])
-
+        scheduler.add_job(memory_info, 'interval', seconds= 5 , name = 'memory', id = 'memory', replace_existing=True)
         return scheduler
 
     def _setup_logger(self, name):
@@ -127,6 +136,7 @@ class Instrument(object):
         # create formatter
         if name == 'apscheduler':
             log_format = '%(asctime)s [%(levelname)s] - Module:scheduler :: %(message)s'
+            log_format = '%(asctime)s [%(levelname)s] - [scheduler] :: %(message)s'
         else:
             log_format = self._log_format
 
@@ -165,6 +175,7 @@ class Instrument(object):
         all_module_topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t = '#')
         client.message_callback_add(all_module_topic.value, self._on_module_message)
 
+        # client.max_queued_messages_set(self._mqtt_max_queue)
         return client
 
 
@@ -216,6 +227,7 @@ class Instrument(object):
 
     def log_message(self, module, msg, level = logging.INFO, send_mqtt = True):
         log_message = "- Module:{0} :: {1}"
+        log_message = "- [{0}] :: {1}"
         log_message = log_message.format(module,msg)
 
         self._log_info['send_mqtt'] = send_mqtt
@@ -252,7 +264,8 @@ class Instrument(object):
         if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
             count = Message.update({Message.sent: True}).where(Message.sent == False).execute()
             self._mqtt_messages_lost = False
-            self.log_message(module = 'DB', msg = 'Sent '+ str(count)+ ' messages')
+            self.log_message(module = 'database', msg = 'Sent '+ str(count)+ ' messages')
+            gc.collect()
 
 
     def _mqtt_publish(self, msg):
@@ -309,50 +322,43 @@ class Instrument(object):
         # Try (*maube)
         return self._imodules[name]
 
-    def get_mode(self, name):
-        print(name + " Started")
-
-    def get_events(self):
-        return []
-        # return [('event_test', '*/3')]
-
-    def run_job(self, name):
-        actions = self._jobs[name]
-
-        for action_type, action in actions:
+    def run_actions(self, actions):
+        for action_type, name, value in actions:
             if action_type == 'mode':
-                self.run_mode(action)
+                self.run_mode(name)
             elif action_type == 'module':
-                self.run_action(action[0], action[1])
+                self.run_action(name, value)
             elif action_type == 'wait':
-                time.sleep(convert_to_seconds(int(action[0]),action[1]))
+                time.sleep(convert_to_seconds(name, int(value)))
             else:
                 raise ValueError("Invalid action type:" + action_type)
 
     def run_mode(self, name):
-        actions = self._modes[name]
-        self.log_message(module = "instrument", msg = "Started mode: " + name)
-        for module, action in actions:
-            if not self.run_action(module, action):
-                return False
-        self.log_message(module = "instrument", msg = "Mode executed successfully: " + name)
-        return True
+        try:
+            actions = self._modes[name]
+            self.log_message(module = "instrument", msg = "Started mode: " + name)
+            self.run_actions(actions)
+            self.log_message(module = "instrument", msg = "Mode executed successfully: " + name)
+        except Exception as e:
+            self.log_message(module = "instrument", msg = "Mode did not execute: " + name + str(e), level = logging.ERROR)
 
-    def set_job(self, name, actions):
-        tuple_actions = self._get_tuple_actions(self, actions)
-        if tuple_actions:
-            self._jobs[name] = tuple_actions
-            status = "Job saved successfully: "+ name
+    def add_job(self, trigger=None, name = None, actions = None, **trigger_args):
+        try:
+            tuple_actions = self._get_tuple_actions(actions)
+            self.scheduler.add_job(_run_job, trigger = trigger, name=name , id=name, replace_existing=True, args = [name, tuple_actions], **trigger_args)
+            status = "Job added: " + name
             level = logging.INFO
-        else:
-            status = "Job not added: " + name
-            level = logging.WARNING
+        except Exception as e:
+            status = str(e) + " Job not added: " + name
+            level = logging.ERROR
         self.log_message(module = "instrument", msg = status, level = level)
 
-    def set_mode(self, name, actions):
+    def add_mode(self, name, actions):
         try:
-            tuple_actions = self._get_tuple_actions(self, actions)
-            for module, action in actions:
+            tuple_actions = self._get_tuple_actions(actions)
+            for action_type, module, action in tuple_actions:
+                if action_type != 'module':
+                    raise ValueError("Invalid mode format")
                 self._imodules[module].validate_action(action)
             self._modes[name] = tuple_actions
             status = "Mode saved successfully: "+ name
@@ -365,15 +371,14 @@ class Instrument(object):
     def _get_tuple_actions(self, actions):
         # Gets actions list and converts it to tuples list
         tuple_actions = []
-        try:
-            for a in actions:
-                action = a.split(':')
-                if len(action) < 2 or len(action) > 3:
-                    raise ValueError("Invalid action format: " + action)
-                tuple_actions.append((action[0], action[1], action[2] if len(action) == 3 else None))
-        except Exception as e:
-            tuple_actions = None
-            self.log_message(module = "instrument", msg = str(e), level = logging.ERROR)
+        e = ValueError("Invalid action format: " + str(actions))
+        for a in actions:
+            action = a.split(':')
+            if len(action) < 2 or len(action) > 3:
+                raise e
+            tuple_actions.append((action[0], action[1], action[2] if len(action) == 3 else None))
+        if not tuple_actions:
+            raise e
         return tuple_actions
 
 
@@ -391,14 +396,11 @@ class Instrument(object):
         return True if serial_action else False
 
 
-
-
     def start(self, test = False):
         # Starts async MQTT client, sends lost messages when connected and starts reading data
         self._mqtt_client.loop_start()
         self._mqtt_send_crash_messages()
         self.scheduler.start()
-        self._memory_usage()
         if not test:
             self.log_message(module = MQTT_TYPE_READING, msg = "Starting reader on topic = "+ self.mqtt_publish_topic.value)
             self.start_reader()
@@ -424,7 +426,7 @@ class Instrument(object):
                 self.stop()
                 break
             except Exception as e:
-                self.log_message(module = MQTT_TYPE_READING, msg = str(e), level = logging.ERROR)
+                self.log_message(module = MQTT_TYPE_READING, msg = str(e), level = logging.WARN)
                 self._memory_usage()
                 time.sleep(5)
 

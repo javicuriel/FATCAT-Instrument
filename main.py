@@ -14,15 +14,19 @@ def main():
     if os.path.exists(config_file):
         global instrument
         instrument = get_instrument_config_file()
-        instrument.set_mode('analisis', ['licor:on', 'extp:off', 'valve:on', 'pump:on'])
-        instrument.set_mode('sampling', ['pump:off', 'valve:off', 'extp:on', 'licor:off'])
+        instrument.add_mode('analisis', ['module:licor:on', 'module:extp:off', 'module:valve:on', 'module:pump:on'])
+        instrument.add_mode('sampling', ['module:pump:off', 'module:valve:off', 'module:extp:on', 'module:licor:off'])
+        # mqtt_add_mode = "licor:on,extp:off,valve:on,pump:on"
 
         if args.debug:
             logging.getLogger(instrument.name).setLevel(logging.DEBUG)
             logging.getLogger(instrument.scheduler.name).setLevel(logging.DEBUG)
 
-        # instrument.scheduler.add_job(otro_analisis, 'interval', seconds= 10 , name = 'RunAnalysis', id = 'RunAnalysis', replace_existing=True, coalesce= True)
-        instrument.scheduler.add_job(run_analysis, 'interval', seconds= 10 , name = 'RunAnalysis', id = 'RunAnalysis', replace_existing=True)
+        # mqtt_add_job = "mode:licor:on,mode:extp:off,mode:valve:on,mode:pump:on"
+        instrument.add_job(trigger = 'cron', hour="*/6", name = 'run_analysis', actions = ['mode:analisis', 'wait:seconds:7', 'module:oven:on', 'wait:seconds:27', 'module:oven:on', 'mode:sampling'])
+        # instrument.add_job(name, actions)
+        # convert to tuple array
+        # scheduler.add_job
 
         instrument.start()
 
