@@ -118,7 +118,7 @@ class Instrument(object):
         scheduler.name = 'apscheduler'
         self._setup_logger(scheduler.name)
 
-        scheduler.add_job(memory_info, 'interval', seconds= 5 , name = 'memory', id = 'memory', replace_existing=True)
+        # scheduler.add_job(memory_info, 'interval', seconds= 5 , name = 'memory', id = 'memory', replace_existing=True)
         return scheduler
 
     def _setup_logger(self, name):

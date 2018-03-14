@@ -1,23 +1,16 @@
-class Factory(object):
-    def __init__(self):
-        super(Factory, self).__init__()
+import configparser
+config_file = 'config.ini'
+config = configparser.ConfigParser()
+config.read(config_file)
+for mode in config['MODES']:
+    print(config.get('MODES', mode).split(','))
 
-    @abstractmethod
-    def run_event(self):
-        pass
+jobs = [section for section in config.sections() if section.startswith('JOB.')]
+print(jobs)
 
-    @abstractmethod
-    def get_events(self):
-        pass
-
-    def set_up_scheduler(self):
-        jobstores = {
-            'default': SQLAlchemyJobStore(url='sqlite:///jobs.db')
-        }
-        scheduler = BackgroundScheduler(jobstores = jobstores)
-
-        events = self.get_events()
-        for event_name, time in events:
-            scheduler.add_job(run_event, 'cron', second=time, id=event_name, replace_existing=True, args = [event_name])
-
-        return scheduler
+print(config['MODULES']["pump"].split(','))
+print(eval(config['MODULES']["pump"]))
+# for mode in config['Test']:
+#     x, y = config.get('Test', mode).split('\n')
+#     print(x)
+#     print(y)
