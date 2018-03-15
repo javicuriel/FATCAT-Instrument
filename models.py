@@ -21,16 +21,6 @@ class Message(BaseModel):
     timestamp = pw.DateTimeField(default=datetime.datetime.now)
 
 
-# class Mode(object):
-#     def __init__(self, name, instrument):
-#         self.name = name
-#         self.instrument = instrument
-#
-#     def add_action():
-#     def del_action():
-#     def get_actions():
-
-
 class IModule(object):
     def __init__(self, name, is_reader = False):
         super(IModule, self).__init__()

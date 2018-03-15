@@ -13,6 +13,7 @@ import time, os, psutil, datetime
 import logging
 import sys
 import gc
+import re
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -67,6 +68,8 @@ class Instrument(object):
     def __init__(self, date_format = '%Y-%m-%d %H:%M:%S', *args, **kwargs ):
         super(Instrument, self).__init__()
         global SingletonInstrument
+        if SingletonInstrument:
+            raise ValueError("SingletonInstrument already set")
 
         self.uuid = str(get_mac())
         self.name = 'instrument'
@@ -108,48 +111,62 @@ class Instrument(object):
         SingletonInstrument = self
 
 
+    def log_message(self, module, msg, level = logging.INFO, send_mqtt = True):
+        """
+        Logs a message with standard format
+        Set send_mqtt to false if MQTT logging is not required
+        """
+        log_message = "- [{0}] :: {1}"
+        log_message = log_message.format(module,msg)
+        self._log_info['send_mqtt'] = send_mqtt
+        self._logger.log(level,log_message)
 
     def _set_up_scheduler(self):
-
+        # Creates scheduler with local database and logger
+        # returns scheduler
         jobstores = {
             'default': SQLAlchemyJobStore(url='sqlite:///jobs.db')
         }
         scheduler = BackgroundScheduler(jobstores = jobstores)
         scheduler.name = 'apscheduler'
         self._setup_logger(scheduler.name)
-
-        # scheduler.add_job(memory_info, 'interval', seconds= 5 , name = 'memory', id = 'memory', replace_existing=True)
+        scheduler.add_job(memory_info, 'interval', seconds= 5 , name = 'memory', id = 'memory', replace_existing=True)
         return scheduler
 
     def _setup_logger(self, name):
+        # Get logger by name
         logger = logging.getLogger(name)
-        # logger = logging.getLogger('apscheduler')
-
+        # Default level is INFO unless specified by user
         logger.setLevel(logging.INFO)
 
+        # Set log MQTT topic
         topic = self._create_topic(topic_type = MQTT_TYPE_STATUS)
+        # Create MQTT-console handler
         mqtth = InstrumentLogHandler(topic, self)
-        # create console handler and set level to debug
+
+        # Set up MQTT-console and file handler
         instrument_log_handler = logging.StreamHandler(mqtth)
         fileHandler = logging.FileHandler('{0}.log'.format(self.name))
 
-
-        # create formatter
+        # Set log format
         if name == 'apscheduler':
-            log_format = '%(asctime)s [%(levelname)s] - Module:scheduler :: %(message)s'
             log_format = '%(asctime)s [%(levelname)s] - [scheduler] :: %(message)s'
         else:
             log_format = self._log_format
 
+        # Create formatter
         formatter = logging.Formatter(fmt = log_format, datefmt = self.date_format)
 
-        # add formatter to ch
+        # Add formatter to handlers
         instrument_log_handler.setFormatter(formatter)
         fileHandler.setFormatter(formatter)
 
-        # add ch to logger
+        # Add handlers to logger
         logger.addHandler(instrument_log_handler)
         logger.addHandler(fileHandler)
+        # Set logger adapter to pass variables
+        # TODO
+        # not needed
         logger = logging.LoggerAdapter(logger, self._log_info)
 
         return logger
@@ -161,7 +178,7 @@ class Instrument(object):
             client_id = self.uuid,
             clean_session = self._mqtt_clean_session
         )
-
+        # Connection settings
         client.connect_async(
             host = self.mqtt_host,
             port = self.mqtt_port,
@@ -176,6 +193,7 @@ class Instrument(object):
         all_module_topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t = '#')
         client.message_callback_add(all_module_topic.value, self._on_module_message)
 
+        # Set max messages stored in memory
         client.max_queued_messages_set(self._mqtt_max_queue)
         return client
 
@@ -185,15 +203,14 @@ class Instrument(object):
         # and doubles time each try with maximum 32 second waiting time
         port = self._lookup_port()
         wait = 2
-
         while not port:
-             print("No TCA found, waiting " + str(wait) + " seconds...")
-             time.sleep(wait)
-             if wait < 32:
-                 wait = wait*2
-             port = self._lookup_port()
+            self.log_message(module = "serial", msg = "No TCA found, waiting " + str(wait) + " seconds...", level = logging.WARN)
+            time.sleep(wait)
+            if wait < 32:
+                wait = wait*2
+            port = self._lookup_port()
 
-        print("Serial port found: " + port.device)
+        self.log_message(module = "serial", msg = "Serial port found: " + port.device)
         return serial.Serial(
             port = port.device,
             baudrate = self.serial_baudrate,
@@ -212,65 +229,50 @@ class Instrument(object):
 
     def _on_module_message(self, client, userdata, message):
         # Topic format
-        # {id}/modules/{module_name} payload={action}
+        # {id}/modules/{module_name}
+        # payload: {action} or {action=99}
         module_name = message.topic.split('/')[2]
         action = str(message.payload)
         self.log_message(module = module_name, msg = "MQTT Message: "+ action, level = logging.DEBUG)
         self.run_action(module_name, action)
 
-    def _read_data(self):
-        # Read data from serial
-        if not self._serial:
-            raise ValueError('Serial is not set!')
-
-        return self._serial.readline().rstrip('\n')
-
-
-    def log_message(self, module, msg, level = logging.INFO, send_mqtt = True):
-        log_message = "- Module:{0} :: {1}"
-        log_message = "- [{0}] :: {1}"
-        log_message = log_message.format(module,msg)
-
-        self._log_info['send_mqtt'] = send_mqtt
-        self._logger.log(level,log_message)
-
     def _mqtt_on_connect(self, *args, **kwargs):
         # Set _mqtt_connected flag to true
         self._mqtt_connected = True
-        self.log_message(module = 'MQTTClient', msg = 'connected to '+ self.mqtt_host)
+        self.log_message(module = 'mqttclient', msg = 'connected to '+ self.mqtt_host)
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
         for imodule in self._imodules:
             topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t=imodule)
             self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
-            self.log_message(module = 'MQTTClient', msg = 'Subscribe to '+ imodule, level = logging.DEBUG)
+            self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ imodule, level = logging.DEBUG)
 
     def _mqtt_on_disconnect(self, *args, **kwargs):
         # Set _mqtt_connected flag to false
         self._mqtt_connected = False
-        self.log_message(module = 'MQTTClient', msg = 'disconnected')
+        self.log_message(module = 'mqttclient', msg = 'disconnected')
 
     def _mqtt_resend_from_db(self):
-        # Run aplication on start up, resends messages not recieved
+        # Resends messages not recieved from database
+        # Should be run on aplication start up
         messages = Message.select().where(Message.sent == False)
         self.log_message(module = 'database', msg = 'Resending '+ str(messages.count())+ ' messages')
         for msg in messages:
             self._mqtt_publish(msg)
 
     def _mqtt_send_lost_messages(self):
-        # If client is connected and a message was lost then send all messages that where not received
+        # If client is connected, all messages stored in memory are sent, and there was messages lost
+        # Update database sent status of messages
         if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
             count = Message.update({Message.sent: True}).where(Message.sent == False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).execute()
             self._mqtt_messages_lost = False
             self.log_message(module = 'database:memory', msg = 'Sent '+ str(count)+ ' messages')
             gc.collect()
 
+            # If there where messages not sent and stored in local database, resend them
             if count >= self._mqtt_max_queue:
                 self._mqtt_resend_from_db()
-
-
-
 
     def _mqtt_publish(self, msg):
         # Publish the message to the server and store result in msg_info
@@ -286,21 +288,21 @@ class Instrument(object):
                 mqtt_err = '[MQTT_ERR_NO_CONN]'
             elif msg_info.rc == mqtt.MQTT_ERR_QUEUE_SIZE:
                 mqtt_err = '[MQTT_ERR_QUEUE_SIZE]'
-
-        # Log
+        # Debug log for mqtt messages
         self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = msg.payload.replace("\t", " "), level = logging.DEBUG ,send_mqtt = False)
 
         # Save the message in the local database
-        msg.save()
-
+        # msg.save()
+        # return True or false
         return msg.sent
 
     def _create_topic(self, topic_type, t = ''):
         # Creates topic with format:
-        # {id}/{topic_type}/{val}
+        # {id}/{topic_type}/{t}
         final_value = self.uuid + '/' + topic_type
         if t:
             final_value += '/' + t
+        # If topic was already in database the get if not create
         topic, _ = Topic.get_or_create(value = final_value)
         return topic
 
@@ -311,6 +313,13 @@ class Instrument(object):
     @mqtt_publish_topic.setter
     def mqtt_publish_topic(self, value):
         self._mqtt_publish_topic = self._create_topic(topic_type = MQTT_TYPE_READING)
+
+    def _read_data(self):
+        # Read line from serial and remove \n character
+        if not self._serial:
+            raise ValueError('Serial is not set!')
+
+        return self._serial.readline().rstrip('\n')
 
     def add_module(self, imodule):
         if imodule.name in self._imodules.keys():
@@ -323,7 +332,7 @@ class Instrument(object):
 
     def get_module(self, name):
         # TODO
-        # Try (*maube)
+        # Try (*maybe)
         return self._imodules[name]
 
     def run_actions(self, actions):
@@ -338,13 +347,14 @@ class Instrument(object):
                 raise ValueError("Invalid action type:" + action_type)
 
     def run_mode(self, name):
+        module = "instrument"
         try:
             actions = self._modes[name]
-            self.log_message(module = "instrument", msg = "Started mode: " + name)
+            self.log_message(module = module, msg = "Started mode: " + name)
             self.run_actions(actions)
-            self.log_message(module = "instrument", msg = "Mode executed successfully: " + name)
+            self.log_message(module = module, msg = "Mode executed successfully: " + name)
         except Exception as e:
-            self.log_message(module = "instrument", msg = "Mode did not execute: " + name + str(e), level = logging.ERROR)
+            self.log_message(module = module, msg = "Mode did not execute: " + name + str(e), level = logging.ERROR)
 
     def add_job(self, trigger=None, name = None, actions = None, **trigger_args):
         try:
@@ -375,11 +385,12 @@ class Instrument(object):
     def _get_tuple_actions(self, actions):
         # Gets actions list and converts it to tuples list
         tuple_actions = []
+        regex = "^((module|wait):\w+:\w+)$|^(mode:\w+)$"
         e = ValueError("Invalid action format: " + str(actions))
         for a in actions:
-            action = a.split(':')
-            if len(action) < 2 or len(action) > 3:
+            if not re.match(regex, a):
                 raise e
+            action = a.split(':')
             tuple_actions.append((action[0], action[1], action[2] if len(action) == 3 else None))
         if not tuple_actions:
             raise e
@@ -401,7 +412,7 @@ class Instrument(object):
 
 
     def start(self, test = False):
-        # Starts async MQTT client, sends lost messages when connected and starts reading data
+        # Starts async MQTT client, sends lost messages when connected, starts scheduler and starts reading data
         self._mqtt_client.loop_start()
         self._mqtt_resend_from_db()
         self.scheduler.start()
@@ -411,7 +422,8 @@ class Instrument(object):
 
     def _get_timestamp(self):
         # Return timestamp with user set format
-        return datetime.datetime.now().strftime(self.date_format)
+        # return datetime.datetime.now().strftime(self.date_format)
+        return datetime.datetime.now()
 
     def _memory_usage(self):
         process = psutil.Process(os.getpid())

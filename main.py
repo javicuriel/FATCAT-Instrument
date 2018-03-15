@@ -61,11 +61,11 @@ def get_instrument_config_file():
         serial_timeout = eval(config['SERIAL_SETTINGS']['SERIAL_TIMEOUT']),
     )
     instrument._serial = ser
-    set_modules_config_file(config, instrument)
+    set_options_config_file(config, instrument)
     return instrument
 
 # Sets up instrument's modules with config file settings
-def set_modules_config_file(config, instrument):
+def set_options_config_file(config, instrument):
     for name in config['MODULES']:
         module = IModule(name = name)
         for action in eval(config['MODULES'][name]):
