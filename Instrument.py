@@ -29,11 +29,11 @@ Message.create_table(True)
 SingletonInstrument = None
 
 def memory_info():
-    SingletonInstrument._memory_usage()
+    SingletonInstrument.memory_usage()
 
-def _run_job(event_name, actions):
+def helper_run_job(event_name, actions):
     # Helper function tu run a job
-    SingletonInstrument.run_actions(actions)
+    SingletonInstrument._run_actions(event_name, actions)
 
 def convert_to_seconds(unit, value):
     """
@@ -130,7 +130,7 @@ class Instrument(object):
         scheduler = BackgroundScheduler(jobstores = jobstores)
         scheduler.name = 'apscheduler'
         self._setup_logger(scheduler.name)
-        scheduler.add_job(memory_info, 'interval', seconds= 5 , name = 'memory', id = 'memory', replace_existing=True)
+        scheduler.add_job(memory_info, 'interval', seconds= 60 , name = 'memory', id = 'memory', replace_existing=True)
         return scheduler
 
     def _setup_logger(self, name):
@@ -237,7 +237,7 @@ class Instrument(object):
         self.run_action(module_name, action)
 
     def _mqtt_on_connect(self, *args, **kwargs):
-        # Set _mqtt_connected flag to true
+        # Set _mqtt_connected flag to true and log
         self._mqtt_connected = True
         self.log_message(module = 'mqttclient', msg = 'connected to '+ self.mqtt_host)
 
@@ -249,7 +249,7 @@ class Instrument(object):
             self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ imodule, level = logging.DEBUG)
 
     def _mqtt_on_disconnect(self, *args, **kwargs):
-        # Set _mqtt_connected flag to false
+        # Set _mqtt_connected flag to false and log it
         self._mqtt_connected = False
         self.log_message(module = 'mqttclient', msg = 'disconnected')
 
@@ -322,6 +322,7 @@ class Instrument(object):
         return self._serial.readline().rstrip('\n')
 
     def add_module(self, imodule):
+        # Adds modules to instrument imodules and sets its serial
         if imodule.name in self._imodules.keys():
             msg = imodule.name + ' already exists! Modules cannot have the same name.'
             self.log_message(module = "Instrument", msg = msg, level = logging.CRITICAL, send_mqtt = False)
@@ -333,33 +334,48 @@ class Instrument(object):
     def get_module(self, name):
         # TODO
         # Try (*maybe)
+        # Get module
         return self._imodules[name]
 
-    def run_actions(self, actions):
+    def _run_actions(self, event_name, actions):
+        # Runs a list of actions given in tuple form: (action_type, name, value)
+        # Not logged becasue scheduler already logs jobs
         for action_type, name, value in actions:
             if action_type == 'mode':
                 self.run_mode(name)
             elif action_type == 'module':
                 self.run_action(name, value)
             elif action_type == 'wait':
+                self.log_message(module = event_name, msg = "Waiting "+ value + " " + name)
                 time.sleep(convert_to_seconds(name, int(value)))
             else:
                 raise ValueError("Invalid action type:" + action_type)
 
     def run_mode(self, name):
+        # Run mode actions
         module = "instrument"
         try:
             actions = self._modes[name]
             self.log_message(module = module, msg = "Started mode: " + name)
-            self.run_actions(actions)
+            self._run_actions(name, actions)
             self.log_message(module = module, msg = "Mode executed successfully: " + name)
         except Exception as e:
             self.log_message(module = module, msg = "Mode did not execute: " + name + str(e), level = logging.ERROR)
 
     def add_job(self, trigger=None, name = None, actions = None, **trigger_args):
+        """
+        Adds a job to scheduler with helper function to call SingletonInstrument._run_actions(actions)
+        trigger options: 'cron' | 'interval' | 'date'
+        name is the id and name of job that is going to be stored by the scheduler
+        actions list and format  => ['action_type:name:value']
+        trigger_args depend on type of trigger, see apscheduler documentation.
+        ej. add_job('interval', 'example_name', [module:example_module:action_1, module:example_module:action_2], minutes = 10 )
+        """
         try:
             tuple_actions = self._get_tuple_actions(actions)
-            self.scheduler.add_job(_run_job, trigger = trigger, name=name , id=name, replace_existing=True, args = [name, tuple_actions], **trigger_args)
+            # Because scheduler stores arguments in database, self is not serializable
+            # Therefore we use helper function with actions calling on the singleton
+            self.scheduler.add_job(helper_run_job, trigger = trigger, name=name , id=name, replace_existing=True, args = [name, tuple_actions], **trigger_args)
             status = "Job added: " + name
             level = logging.INFO
         except Exception as e:
@@ -372,7 +388,7 @@ class Instrument(object):
             tuple_actions = self._get_tuple_actions(actions)
             for action_type, module, action in tuple_actions:
                 if action_type != 'module':
-                    raise ValueError("Invalid mode format")
+                    raise ValueError("Modes can only run modules commands!")
                 self._imodules[module].validate_action(action)
             self._modes[name] = tuple_actions
             status = "Mode saved successfully: "+ name
@@ -383,7 +399,8 @@ class Instrument(object):
         self.log_message(module = "instrument", msg = status, level = level)
 
     def _get_tuple_actions(self, actions):
-        # Gets actions list and converts it to tuples list
+        # Gets actions list in format: ['module:licor:on', 'module:extp:off']
+        # Verify format with regex and converts it to tuples and append it to list so it is saved in correct format
         tuple_actions = []
         regex = "^((module|wait):\w+:\w+)$|^(mode:\w+)$"
         e = ValueError("Invalid action format: " + str(actions))
@@ -412,7 +429,9 @@ class Instrument(object):
 
 
     def start(self, test = False):
-        # Starts async MQTT client, sends lost messages when connected, starts scheduler and starts reading data
+        """
+        Starts async MQTT client, sends lost messages when connected, starts scheduler and starts reading data
+        """
         self._mqtt_client.loop_start()
         self._mqtt_resend_from_db()
         self.scheduler.start()
@@ -425,7 +444,7 @@ class Instrument(object):
         # return datetime.datetime.now().strftime(self.date_format)
         return datetime.datetime.now()
 
-    def _memory_usage(self):
+    def memory_usage(self):
         process = psutil.Process(os.getpid())
         mb = process.memory_info().rss/1000000
         self.log_message(module = 'memory', msg = str(mb)+ ' mb', level = logging.INFO)
@@ -443,7 +462,7 @@ class Instrument(object):
                 break
             except Exception as e:
                 self.log_message(module = MQTT_TYPE_READING, msg = str(e), level = logging.WARN)
-                self._memory_usage()
+                self.memory_usage()
                 time.sleep(5)
 
     def stop(self):
