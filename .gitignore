@@ -5,3 +5,4 @@ SampleData.txt
 *.pyc
 *.pyo
 *.log
+*.pem

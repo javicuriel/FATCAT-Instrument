@@ -1,16 +1,30 @@
-import configparser
-config_file = 'config.ini'
-config = configparser.ConfigParser()
-config.read(config_file)
-for mode in config['MODES']:
-    print(config.get('MODES', mode).split(','))
+import functools
 
-jobs = [section for section in config.sections() if section.startswith('JOB.')]
-print(jobs)
 
-print(config['MODULES']["pump"].split(','))
-print(eval(config['MODULES']["pump"]))
-# for mode in config['Test']:
-#     x, y = config.get('Test', mode).split('\n')
-#     print(x)
-#     print(y)
+def with_log(func):
+    @functools.wraps(func)
+    def test_log(*args, **kwargs):
+        print('LOG: Running job "%s"' % func.__name__)
+
+        try:
+            result = func(*args, **kwargs)
+            status = "Completed"
+        except Exception as e:
+            status = "Failed: "+ str(e)
+            result = None
+
+        print('LOG: Job %s' % status)
+        return result
+
+
+    return test_log
+
+@with_log
+def job():
+    """
+    TEST JOB DOC
+    """
+    # return print("JOBBING")
+    raise ValueError("ENTRO ERROR")
+
+job()
