@@ -21,8 +21,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 
-MQTT_TYPE_READING = 'reading'
-MQTT_TYPE_MODULE = 'modules'
+MQTT_TYPE_READING = 'iot-2/evt/reading'
+MQTT_TYPE_MODULE = 'iot-2/cmd'
 MQTT_TYPE_STATUS = 'status'
 
 Topic.create_table(True)
@@ -106,11 +106,14 @@ class Instrument(object):
         if SingletonInstrument:
             raise ValueError("SingletonInstrument already set")
 
-        # self.uuid = 'macbook-'+str(get_mac())
-        # # 'projects/{}/locations/{}/registries/{}/devices/{}'
-        # self.uuid = 'projects/api-project-516409951425/locations/europe-west1/registries/instruments/devices/'+self.uuid
-        self.uuid = 'projects/api-project-516409951425/locations/europe-west1/registries/instruments/devices/macbook-154505275890450'
+        self.uuid = str(get_mac())
+
         self.name = 'instrument'
+
+        # GOOGLE CLOUD
+        # self.uuid = 'projects/api-project-516409951425/locations/europe-west1/registries/instruments/devices/macbook-154505275890450'
+        # self.config_topic = '/devices/macbook-154505275890450/config'
+        # self.event_topic = '/devices/macbook-154505275890450/events'
 
         self.mqtt_host = kwargs.get('mqtt_host')
         self.mqtt_port = kwargs.get('mqtt_port')
@@ -218,10 +221,11 @@ class Instrument(object):
     def _setup_mqtt_client(self):
         # Creates MQTT client
         client = mqtt.Client(
-            client_id = 'projects/api-project-516409951425/locations/europe-west1/registries/instruments/devices/macbook-154505275890450',
+            client_id = 'd:kbld7d:{}:{}'.format(self.name, self.uuid),
             protocol= mqtt.MQTTv311,
             clean_session = self._mqtt_clean_session
         )
+
         # Connection settings
         client.connect_async(
             host = self.mqtt_host,
@@ -229,15 +233,15 @@ class Instrument(object):
             keepalive = self.mqtt_keep_alive
         )
 
-        password = create_jwt('api-project-516409951425', 'rsa_private.pem', 'RS256')
-
         client.username_pw_set(
-                username='unused',
-                password=password
+                username='use-token-auth',
+                # Should be environment variable
+                password= os.environ['IBM_TOKEN']
         )
 
         # Enable SSL/TLS support.
-        # client.tls_set(ca_certs='roots.pem', tls_version=ssl.PROTOCOL_TLSv1_2)
+        if self.mqtt_port == 8883:
+            client.tls_set(cert_reqs = ssl.CERT_REQUIRED, tls_version = ssl.PROTOCOL_TLSv1_2)
 
         # Sets callback functions for message arrival
         client.on_connect = self._mqtt_on_connect
@@ -249,6 +253,7 @@ class Instrument(object):
 
         # Set max messages stored in memory
         client.max_queued_messages_set(self._mqtt_max_queue)
+
 
         return client
 
@@ -319,7 +324,7 @@ class Instrument(object):
             self._mqtt_publish(msg)
 
     def _mqtt_send_lost_messages(self):
-        # If client is connected, all messages stored in memory are sent, and there was messages lost
+        # If client is connected, all messages stored in memory where sent, and there was messages lost
         # Update database sent status of messages
         if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
             count = Message.update({Message.sent: True}).where(Message.sent == False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).execute()
@@ -356,9 +361,12 @@ class Instrument(object):
     def _create_topic(self, topic_type, t = ''):
         # Creates topic with format:
         # {id}/{topic_type}/{t}
-        final_value = self.uuid + '/' + topic_type
+        # BEFORE
+        # final_value = self.uuid + '/' + topic_type
+        final_value = topic_type
         if t:
             final_value += '/' + t
+        final_value += '/fmt/text'
         # If topic was already in database the get if not create
         topic, _ = Topic.get_or_create(value = final_value)
         return topic
