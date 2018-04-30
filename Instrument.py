@@ -191,7 +191,7 @@ class Instrument(object):
         scheduler = BackgroundScheduler(jobstores = jobstores)
         scheduler.name = 'apscheduler'
         self._setup_logger(scheduler.name)
-        # scheduler.add_job(memory_info, 'interval', seconds= 60 , name = 'memory', id = 'memory', replace_existing=True)
+        # scheduler.add_job(memory_info, 'interval', seconds= 5 , name = 'memory', id = 'memory', replace_existing=True)
         return scheduler
 
     def _setup_logger(self, name):
@@ -337,13 +337,16 @@ class Instrument(object):
         # Should be run on aplication start up
         messages = Message.select().where(Message.sent == False)
         self.log_message(module = 'database', msg = 'Resending '+ str(messages.count())+ ' messages')
+        if messages:
+            self._mqtt_messages_lost = True
         for msg in messages:
             self._mqtt_publish(msg)
 
     def _mqtt_send_lost_messages(self):
         # If client is connected, all messages stored in memory where sent, and there was messages lost
         # Update database sent status of messages
-        if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
+        # if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
+        if self._mqtt_connected and self._mqtt_messages_lost and len(self._mqtt_client._out_messages) <= 1:
             count = Message.update({Message.sent: True}).where(Message.sent == False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).execute()
             self._mqtt_messages_lost = False
             self.log_message(module = 'database:memory', msg = 'Sent '+ str(count)+ ' messages')
@@ -355,7 +358,13 @@ class Instrument(object):
 
     def _mqtt_publish(self, msg):
         # Publish the message to the server and store result in msg_info
-        msg_info = self._mqtt_client.publish(msg.topic.value, to_json(msg), qos = self.mqtt_qos, retain = self._mqtt_retain)
+        omit = {'id','sent','topic'}
+        data = {x: msg.__data__[x] for x in msg.__data__ if x not in omit}
+        json_data = json.dumps(data)
+        # print(msg.__data__)
+        # print(json_data)
+
+        msg_info = self._mqtt_client.publish(msg.topic.value, json_data, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
         # If sent is successful, set sent flag to true
         if msg_info.rc == mqtt.MQTT_ERR_SUCCESS:
@@ -368,10 +377,11 @@ class Instrument(object):
             elif msg_info.rc == mqtt.MQTT_ERR_QUEUE_SIZE:
                 mqtt_err = '[MQTT_ERR_QUEUE_SIZE]'
         # Debug log for mqtt messages
-        self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = msg.payload.replace("\t", " "), level = logging.DEBUG ,send_mqtt = False)
+        # self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = msg.payload.replace("\t", " "), level = logging.DEBUG ,send_mqtt = False)
+        self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = data, level = logging.DEBUG ,send_mqtt = False)
 
         # Save the message in the local database
-        # msg.save()
+        msg.save()
         # return True or false
         return msg.sent
 
@@ -404,7 +414,20 @@ class Instrument(object):
         if not self._serial:
             raise ValueError('Serial is not set!')
 
-        return self._serial.readline().rstrip('\n')
+        data = self._serial.readline().rstrip('\n').split('\t')
+
+        timestamp = self._get_timestamp()
+
+        keys = ["runtime","spoven","toven","spcoil","tcoil","spband","tband","spcat","tcat","tco2","pco2","co2","flow","curr","countdown","statusbyte"]
+
+        dict_data = {}
+        dict_data['timestamp'] = str(timestamp)
+
+        for i,key in enumerate(keys):
+            dict_data[key] = float(data[i])
+
+
+        return dict_data
 
     def add_module(self, imodule):
         # Adds modules to instrument imodules and sets its serial
@@ -540,8 +563,10 @@ class Instrument(object):
             try:
                 self._mqtt_send_lost_messages()
                 data = self._read_data()
-                timestamp = self._get_timestamp()
-                message = Message(topic = self.mqtt_publish_topic, payload = data, timestamp = timestamp)
+                # timestamp = self._get_timestamp()
+                data['topic'] = self.mqtt_publish_topic
+                # message = Message(topic = self.mqtt_publish_topic, payload = data, timestamp = timestamp)
+                message = Message(**data)
                 self._mqtt_publish(message)
             except KeyboardInterrupt:
                 self.stop()

@@ -16,9 +16,25 @@ class Topic(BaseModel):
 
 class Message(BaseModel):
     topic = pw.ForeignKeyField(Topic)
-    payload = pw.CharField()
     sent = pw.BooleanField(default = False)
     timestamp = pw.DateTimeField(default=datetime.datetime.now)
+
+    runtime = pw.FloatField()
+    spoven = pw.FloatField()
+    toven = pw.FloatField()
+    spcoil = pw.FloatField()
+    tcoil = pw.FloatField()
+    spband = pw.FloatField()
+    tband = pw.FloatField()
+    spcat = pw.FloatField()
+    tcat = pw.FloatField()
+    tco2 = pw.FloatField()
+    pco2 = pw.FloatField()
+    co2 = pw.FloatField()
+    flow = pw.FloatField()
+    curr = pw.FloatField()
+    countdown = pw.FloatField()
+    statusbyte = pw.FloatField()
 
 
 class IModule(object):
