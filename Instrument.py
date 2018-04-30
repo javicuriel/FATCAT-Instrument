@@ -360,9 +360,13 @@ class Instrument(object):
         # Publish the message to the server and store result in msg_info
         omit = {'id','sent','topic'}
         data = {x: msg.__data__[x] for x in msg.__data__ if x not in omit}
+
+        if(data['countdown'] == 1):
+            print("LLEGOOO")
+
+        data['timestamp'] = data['timestamp'].isoformat()
+
         json_data = json.dumps(data)
-        # print(msg.__data__)
-        # print(json_data)
 
         msg_info = self._mqtt_client.publish(msg.topic.value, json_data, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
@@ -416,12 +420,14 @@ class Instrument(object):
 
         data = self._serial.readline().rstrip('\n').split('\t')
 
-        timestamp = self._get_timestamp()
+        # timestamp = self._get_timestamp()
+
+        timestamp = datetime.datetime.utcnow()
 
         keys = ["runtime","spoven","toven","spcoil","tcoil","spband","tband","spcat","tcat","tco2","pco2","co2","flow","curr","countdown","statusbyte"]
 
         dict_data = {}
-        dict_data['timestamp'] = str(timestamp)
+        dict_data['timestamp'] = timestamp
 
         for i,key in enumerate(keys):
             dict_data[key] = float(data[i])
@@ -445,6 +451,20 @@ class Instrument(object):
         # Get module
         return self._imodules[name]
 
+    def calculate_analisis():
+        try:
+            t1 = Message.select().where(Message.countdown == 70).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t0 = t1 - datetime.timedelta(seconds = 5)
+            t2 = t1 + datetime.timedelta(seconds = 630)
+            baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where(Message.timestamp >= t0 and Message.timestamp <= t1)
+            flowrate = Message.select(pw.fn.AVG(Message.flow).alias('avg')).where(Message.timestamp >= t1 and Message.timestamp <= t2)
+            curve_points = Message.select(pw.fn.SUM(Message.co2).alias('sum')).where(Message.timestamp >= t1 and Message.timestamp <= t2)
+            total = flowrate.get().avg * (curve_points.get().sum - baseline.get().avg * curve_points.count())
+            print(total)
+        except Exception as e:
+            print("ERROR OCURRED")
+
+
     def _run_actions(self, event_name, actions):
         # Runs a list of actions given in tuple form: (action_type, name, value)
         # Not logged becasue scheduler already logs jobs
@@ -458,6 +478,7 @@ class Instrument(object):
                 time.sleep(convert_to_seconds(name, int(value)))
             else:
                 raise ValueError("Invalid action type:" + action_type)
+        # Calculate analysis
 
     def run_mode(self, name):
         # Run mode actions
@@ -551,7 +572,8 @@ class Instrument(object):
     def _get_timestamp(self):
         # Return timestamp with user set format
         # return datetime.datetime.now().strftime(self.date_format)
-        return datetime.datetime.utcnow().isoformat()
+        return datetime.datetime.utcnow()
+        # return datetime.datetime.utcnow().isoformat()
 
     def memory_usage(self):
         process = psutil.Process(os.getpid())
