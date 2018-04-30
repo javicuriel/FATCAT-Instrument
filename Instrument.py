@@ -16,6 +16,7 @@ import gc
 import re
 import ssl
 import jwt
+import json
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -66,6 +67,19 @@ def create_jwt(project_id, private_key_file, algorithm):
 def memory_info():
     SingletonInstrument.memory_usage()
 
+def to_json(msg):
+    array_msg = msg.payload.rstrip().split('\t')
+    keys = ["runtime","spoven","toven","spcoil","tcoil","spband","tband","spcat","tcat","tco2","pco2","co2","flow","curr","countdown","statusbyte"]
+    data = {}
+    data['timestamp'] = str(msg.timestamp)
+    for i,key in enumerate(keys):
+        data[key] = float(array_msg[i])
+
+    json_data = json.dumps(data)
+
+    return json_data
+
+
 def helper_run_job(event_name, actions):
     # Helper function tu run a job
     SingletonInstrument._run_actions(event_name, actions)
@@ -106,7 +120,8 @@ class Instrument(object):
         if SingletonInstrument:
             raise ValueError("SingletonInstrument already set")
 
-        self.uuid = str(get_mac())
+        # self.uuid = str(get_mac())
+        self.uuid = "test_id"
 
         self.name = 'instrument'
 
@@ -176,7 +191,7 @@ class Instrument(object):
         scheduler = BackgroundScheduler(jobstores = jobstores)
         scheduler.name = 'apscheduler'
         self._setup_logger(scheduler.name)
-        scheduler.add_job(memory_info, 'interval', seconds= 60 , name = 'memory', id = 'memory', replace_existing=True)
+        # scheduler.add_job(memory_info, 'interval', seconds= 60 , name = 'memory', id = 'memory', replace_existing=True)
         return scheduler
 
     def _setup_logger(self, name):
@@ -247,8 +262,9 @@ class Instrument(object):
         client.on_connect = self._mqtt_on_connect
         client.on_disconnect = self._mqtt_on_disconnect
 
-        # Callback is global because client will only subscribe to current modules
+        # Callback is global because client will only subscribe to current modules in function on_connect
         all_module_topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t = '#')
+        print(all_module_topic.value)
         client.message_callback_add(all_module_topic.value, self._on_module_message)
 
         # Set max messages stored in memory
@@ -290,10 +306,11 @@ class Instrument(object):
     def _on_module_message(self, client, userdata, message):
         # Topic format
         # {id}/modules/{module_name}
+        # /iot-2/cmd/{module_name}/fmt/txt
         # payload: {action} or {action=99}
         module_name = message.topic.split('/')[2]
         action = str(message.payload)
-        self.log_message(module = module_name, msg = "MQTT Message: "+ action, level = logging.DEBUG)
+        self.log_message(module = module_name, msg = "MQTT Message: "+ action, level = logging.INFO)
         self.run_action(module_name, action)
 
     def _mqtt_on_connect(self, *args, **kwargs):
@@ -306,7 +323,7 @@ class Instrument(object):
         for imodule in self._imodules:
             topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t=imodule)
             self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
-            self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ imodule, level = logging.DEBUG)
+            self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic.value, level = logging.DEBUG)
 
 
     def _mqtt_on_disconnect(self, *args, **kwargs):
@@ -338,7 +355,7 @@ class Instrument(object):
 
     def _mqtt_publish(self, msg):
         # Publish the message to the server and store result in msg_info
-        msg_info = self._mqtt_client.publish(msg.topic.value, str(msg.timestamp) +'\t'+ msg.payload, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        msg_info = self._mqtt_client.publish(msg.topic.value, to_json(msg), qos = self.mqtt_qos, retain = self._mqtt_retain)
 
         # If sent is successful, set sent flag to true
         if msg_info.rc == mqtt.MQTT_ERR_SUCCESS:
@@ -366,7 +383,10 @@ class Instrument(object):
         final_value = topic_type
         if t:
             final_value += '/' + t
-        final_value += '/fmt/text'
+        if topic_type == MQTT_TYPE_MODULE and t != '#':
+            final_value += '/fmt/txt'
+        elif t != '#':
+            final_value += '/fmt/json'
         # If topic was already in database the get if not create
         topic, _ = Topic.get_or_create(value = final_value)
         return topic
@@ -497,6 +517,7 @@ class Instrument(object):
         """
         Starts async MQTT client, sends lost messages when connected, starts scheduler and starts reading data
         """
+        self.log_message(module = 'instrument', msg = self.uuid)
         self._mqtt_client.loop_start()
         self._mqtt_resend_from_db()
         self.scheduler.start()
@@ -507,7 +528,7 @@ class Instrument(object):
     def _get_timestamp(self):
         # Return timestamp with user set format
         # return datetime.datetime.now().strftime(self.date_format)
-        return datetime.datetime.now()
+        return datetime.datetime.utcnow().isoformat()
 
     def memory_usage(self):
         process = psutil.Process(os.getpid())

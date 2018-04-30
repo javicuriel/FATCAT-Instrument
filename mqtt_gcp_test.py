@@ -236,8 +236,12 @@ def main():
 
     # Publish to the events or state topic based on the flag.
     sub_topic = 'events' if args.message_type == 'event' else 'state'
+    # sub_topic = 'test'
+    # /devices/projects/api-project-516409951425/topics/test
 
     mqtt_topic = '/devices/{}/{}'.format(args.device_id, sub_topic)
+    # mqtt_topic = 'projects/api-project-516409951425/topics/test'
+
 
     jwt_iat = datetime.datetime.utcnow()
     jwt_exp_mins = args.jwt_expires_minutes
@@ -283,7 +287,8 @@ def main():
         # Publish "payload" to the MQTT topic. qos=1 means at least once
         # delivery. Cloud IoT Core also supports qos=0 for at most once
         # delivery.
-        client.publish(mqtt_topic, payload, qos=1)
+        # client.publish(mqtt_topic, payload, qos=1)
+        client.publish(mqtt_topic, '{"mqtt_settings":{"mqtt_server": "localhost"}', qos=1)
 
         # Send events every second. State should not be updated as often
         time.sleep(1 if args.message_type == 'event' else 5)
