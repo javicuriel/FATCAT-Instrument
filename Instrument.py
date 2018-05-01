@@ -7,6 +7,7 @@ from Models import Message
 from Models import IModule
 from uuid import getnode as get_mac
 import paho.mqtt.client as mqtt
+import numpy as np
 import serial
 import serial.tools.list_ports
 import time, os, psutil, datetime
@@ -17,6 +18,7 @@ import re
 import ssl
 import jwt
 import json
+
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -66,18 +68,6 @@ def create_jwt(project_id, private_key_file, algorithm):
 
 def memory_info():
     SingletonInstrument.memory_usage()
-
-def to_json(msg):
-    array_msg = msg.payload.rstrip().split('\t')
-    keys = ["runtime","spoven","toven","spcoil","tcoil","spband","tband","spcat","tcat","tco2","pco2","co2","flow","curr","countdown","statusbyte"]
-    data = {}
-    data['timestamp'] = str(msg.timestamp)
-    for i,key in enumerate(keys):
-        data[key] = float(array_msg[i])
-
-    json_data = json.dumps(data)
-
-    return json_data
 
 
 def helper_run_job(event_name, actions):
@@ -420,8 +410,6 @@ class Instrument(object):
 
         data = self._serial.readline().rstrip('\n').split('\t')
 
-        # timestamp = self._get_timestamp()
-
         timestamp = datetime.datetime.utcnow()
 
         keys = ["runtime","spoven","toven","spcoil","tcoil","spband","tband","spcat","tcat","tco2","pco2","co2","flow","curr","countdown","statusbyte"]
@@ -453,14 +441,21 @@ class Instrument(object):
 
     def calculate_analisis():
         try:
+            ppmtoug = 12.01/22.4
+            co2 = []
+            runtime = []
             t1 = Message.select().where(Message.countdown == 70).order_by(Message.timestamp.desc()).limit(1).get().timestamp
             t0 = t1 - datetime.timedelta(seconds = 5)
             t2 = t1 + datetime.timedelta(seconds = 630)
-            baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where(Message.timestamp >= t0 and Message.timestamp <= t1)
-            flowrate = Message.select(pw.fn.AVG(Message.flow).alias('avg')).where(Message.timestamp >= t1 and Message.timestamp <= t2)
-            curve_points = Message.select(pw.fn.SUM(Message.co2).alias('sum')).where(Message.timestamp >= t1 and Message.timestamp <= t2)
-            total = flowrate.get().avg * (curve_points.get().sum - baseline.get().avg * curve_points.count())
-            print(total)
+            baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where(Message.timestamp >= t0 and Message.timestamp <= t1).get().avg
+            messages = Message.select(Message.co2, Message.flow, Message.runtime).where(Message.timestamp >= t1 and Message.timestamp <= t2)
+            flowrate = messages.select(pw.fn.AVG(Message.flow).alias('avg')).get().avg
+            for m in messages:
+                co2.append((m.co2 - baseline)*ppmtoug)
+                runtime.append(m.runtime)
+            deltatc = np.array(co2)*flowrate
+            total_carbon = np.trapz(deltatc, x=np.array(runtime))
+            print(total_carbon)
         except Exception as e:
             print("ERROR OCURRED")
 
