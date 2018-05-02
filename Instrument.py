@@ -5,6 +5,7 @@
 from Models import Topic
 from Models import Message
 from Models import IModule
+from google_cloud import *
 from uuid import getnode as get_mac
 import paho.mqtt.client as mqtt
 import numpy as np
@@ -16,14 +17,14 @@ import sys
 import gc
 import re
 import ssl
-import jwt
 
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 
-MQTT_TYPE_READING = 'iot-2/evt/reading'
+# MQTT_TYPE_READING = 'iot-2/evt/reading'
+MQTT_TYPE_READING = '/devices/macbook-154505275890450/events'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
 MQTT_TYPE_STATUS = 'status'
 
@@ -32,38 +33,6 @@ Message.create_table(True)
 
 SingletonInstrument = None
 
-def create_jwt(project_id, private_key_file, algorithm):
-    """Creates a JWT (https://jwt.io) to establish an MQTT connection.
-        Args:
-         project_id: The cloud project ID this device belongs to
-         private_key_file: A path to a file containing either an RSA256 or
-                 ES256 private key.
-         algorithm: The encryption algorithm to use. Either 'RS256' or 'ES256'
-        Returns:
-            An MQTT generated from the given project_id and private key, which
-            expires in 20 minutes. After 20 minutes, your client will be
-            disconnected, and a new JWT will have to be generated.
-        Raises:
-            ValueError: If the private_key_file does not contain a known key.
-        """
-
-    token = {
-            # The time that the token was issued at
-            'iat': datetime.datetime.utcnow(),
-            # The time the token expires.
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=60),
-            # The audience field should always be set to the GCP project id.
-            'aud': project_id
-    }
-
-    # Read the private key file.
-    with open(private_key_file, 'r') as f:
-        private_key = f.read()
-
-    print('Creating JWT using {} from private key file {}'.format(
-            algorithm, private_key_file))
-
-    return jwt.encode(token, private_key, algorithm=algorithm)
 
 def memory_info():
     SingletonInstrument.memory_usage()
@@ -115,9 +84,9 @@ class Instrument(object):
         self.name = 'instrument'
 
         # GOOGLE CLOUD
-        # self.uuid = 'projects/api-project-516409951425/locations/europe-west1/registries/instruments/devices/macbook-154505275890450'
-        # self.config_topic = '/devices/macbook-154505275890450/config'
+        self.uuid = 'projects/api-project-516409951425/locations/europe-west1/registries/instruments/devices/macbook-154505275890450'
         # self.event_topic = '/devices/macbook-154505275890450/events'
+        # self.config_topic = '/devices/macbook-154505275890450/config'
 
         self.mqtt_host = kwargs.get('mqtt_host')
         self.mqtt_port = kwargs.get('mqtt_port')
@@ -225,7 +194,8 @@ class Instrument(object):
     def _setup_mqtt_client(self):
         # Creates MQTT client
         client = mqtt.Client(
-            client_id = 'd:kbld7d:{}:{}'.format(self.name, self.uuid),
+            # client_id = 'd:kbld7d:{}:{}'.format(self.name, self.uuid),
+            client_id = self.uuid,
             protocol= mqtt.MQTTv311,
             clean_session = self._mqtt_clean_session
         )
@@ -237,10 +207,12 @@ class Instrument(object):
             keepalive = self.mqtt_keep_alive
         )
 
+        password = create_jwt('api-project-516409951425', 'rsa_private.pem', 'RS256')
+
         client.username_pw_set(
-                username='use-token-auth',
-                # Should be environment variable
-                password= os.environ['IBM_TOKEN']
+            username='unused',
+            # Should be environment variable
+            password=password
         )
 
         # Enable SSL/TLS support.
@@ -374,12 +346,12 @@ class Instrument(object):
         # BEFORE
         # final_value = self.uuid + '/' + topic_type
         final_value = topic_type
-        if t:
-            final_value += '/' + t
-        if topic_type == MQTT_TYPE_MODULE and t != '#':
-            final_value += '/fmt/txt'
-        elif t != '#':
-            final_value += '/fmt/json'
+        # if t:
+        #     final_value += '/' + t
+        # if topic_type == MQTT_TYPE_MODULE and t != '#':
+        #     final_value += '/fmt/txt'
+        # elif t != '#':
+        #     final_value += '/fmt/json'
         # If topic was already in database the get if not create
         topic, _ = Topic.get_or_create(value = final_value)
         return topic
