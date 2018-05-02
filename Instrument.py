@@ -17,7 +17,6 @@ import gc
 import re
 import ssl
 import jwt
-import json
 
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -348,17 +347,8 @@ class Instrument(object):
 
     def _mqtt_publish(self, msg):
         # Publish the message to the server and store result in msg_info
-        omit = {'id','sent','topic'}
-        data = {x: msg.__data__[x] for x in msg.__data__ if x not in omit}
-
-        if(data['countdown'] == 1):
-            print("LLEGOOO")
-
-        data['timestamp'] = data['timestamp'].isoformat()
-
-        json_data = json.dumps(data)
-
-        msg_info = self._mqtt_client.publish(msg.topic.value, json_data, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        data = msg.to_json()
+        msg_info = self._mqtt_client.publish(msg.topic.value, data, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
         # If sent is successful, set sent flag to true
         if msg_info.rc == mqtt.MQTT_ERR_SUCCESS:
@@ -371,7 +361,6 @@ class Instrument(object):
             elif msg_info.rc == mqtt.MQTT_ERR_QUEUE_SIZE:
                 mqtt_err = '[MQTT_ERR_QUEUE_SIZE]'
         # Debug log for mqtt messages
-        # self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = msg.payload.replace("\t", " "), level = logging.DEBUG ,send_mqtt = False)
         self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = data, level = logging.DEBUG ,send_mqtt = False)
 
         # Save the message in the local database
@@ -580,9 +569,7 @@ class Instrument(object):
             try:
                 self._mqtt_send_lost_messages()
                 data = self._read_data()
-                # timestamp = self._get_timestamp()
                 data['topic'] = self.mqtt_publish_topic
-                # message = Message(topic = self.mqtt_publish_topic, payload = data, timestamp = timestamp)
                 message = Message(**data)
                 self._mqtt_publish(message)
             except KeyboardInterrupt:

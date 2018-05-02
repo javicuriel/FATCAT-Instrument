@@ -3,6 +3,7 @@
 
 import peewee as pw
 import datetime
+import json
 
 db = pw.SqliteDatabase('local_store.db')
 
@@ -35,6 +36,13 @@ class Message(BaseModel):
     curr = pw.FloatField()
     countdown = pw.FloatField()
     statusbyte = pw.FloatField()
+
+    def to_json(self):
+        omit = {'id','sent','topic'}
+        data = {x: self.__data__[x] for x in self.__data__ if x not in omit}
+        data['timestamp'] = data['timestamp'].isoformat()
+        json_data = json.dumps(data)
+        return json_data
 
 
 class IModule(object):
