@@ -1,21 +1,30 @@
-import os
-import sys
-from sqlalchemy import Column, ForeignKey, Integer, String, Boolean
+from sqlalchemy import Column, ForeignKey, Integer, String, Boolean, Float, Datetime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import with_polymorphic
 
+engine = create_engine('sqlite:///local_store.db')
 Base = declarative_base()
+Base.metadata.create_all(engine)
+Base.metadata.bind = engine
+DBSession = sessionmaker(bind=engine)
+
+class Topic(Base):
+    __tablename__ = 'topic'
+    id = Column(Integer, primary_key=True)
+    value = Column(String(250))
+    messages = relationship('Message')
+
 
 class Message(Base):
     __tablename__ = 'message'
     id = Column(Integer, primary_key=True)
     type = Column(String(50))
-    timestamp = Column(String(250))
+    timestamp = Column(Datetime)
     sent = Column(Boolean)
-    topic = Column(String(250))
+    topic_id = Column(Integer, ForeignKey('topic.id'))
     __mapper_args__ = {
         'polymorphic_identity':'message',
         'polymorphic_on':type
@@ -30,6 +39,8 @@ class Analysis(Message):
     __tablename__ = 'analysis'
     id = Column(Integer, ForeignKey('message.id') ,primary_key=True)
     cosa_nueva = Column(String(250))
+    total_carbon = Column(Float)
+    max_temp = Column(Float)
     __mapper_args__ = {
         'polymorphic_identity':'analysis',
     }
@@ -38,15 +49,26 @@ class Analysis(Message):
 class Sample(Message):
     __tablename__ = 'sample'
     id = Column(Integer, ForeignKey('message.id') ,primary_key=True)
-    cosa_nueva_otra = Column(String(250))
+    runtime = Column(Float)
+    spoven = Column(Float)
+    toven = Column(Float)
+    spcoil = Column(Float)
+    tcoil = Column(Float)
+    spband = Column(Float)
+    tband = Column(Float)
+    spcat = Column(Float)
+    tcat = Column(Float)
+    tco2 = Column(Float)
+    pco2 = Column(Float)
+    co2 = Column(Float)
+    flow = Column(Float)
+    curr = Column(Float)
+    countdown = Column(Float)
+    statusbyte = Column(Float)
     __mapper_args__ = {
         'polymorphic_identity':'sample'
     }
-engine = create_engine('sqlite:///sqlalchemy_example.db')
-Base.metadata.create_all(engine)
 
-Base.metadata.bind = engine
-DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
 new_analisis = Analysis(cosa_nueva='analisis', timestamp="1234")
