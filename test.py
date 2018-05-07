@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm import with_polymorphic
+import datetime
 
 engine = create_engine('sqlite:///local_store.db')
 Base = declarative_base()
@@ -22,7 +23,7 @@ class Message(Base):
     __tablename__ = 'message'
     id = Column(Integer, primary_key=True)
     type = Column(String(50))
-    timestamp = Column(Datetime)
+    timestamp = Column(Datetime, default=datetime.datetime.utcnow)
     sent = Column(Boolean)
     topic_id = Column(Integer, ForeignKey('topic.id'))
     __mapper_args__ = {
@@ -32,7 +33,9 @@ class Message(Base):
     def to_json(self):
         omit = {'id','sent','topic','_sa_instance_state'}
         data = {x: self.__dict__[x] for x in self.__dict__ if x not in omit}
-        print(data)
+        data['timestamp'] = data['timestamp'].isoformat()
+        json_data = json.dumps(data)
+        return json_data
 
 
 class Analysis(Message):

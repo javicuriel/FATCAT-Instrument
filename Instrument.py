@@ -4,7 +4,11 @@
 
 from Models import Topic
 from Models import Message
+from Models import Sample
+from Models import Analysis
 from Models import IModule
+from Models import DBSession
+from Models import poly
 from google_cloud import *
 from uuid import getnode as get_mac
 import paho.mqtt.client as mqtt
@@ -105,6 +109,8 @@ class Instrument(object):
         self._mqtt_clean_session = False
         self._mqtt_retain = False
         self._mqtt_messages_lost = False
+
+        self.session = DBSession()
 
         # Depending on memory size this is approx 400 MB of memory
         self._mqtt_max_queue = 100000
@@ -296,7 +302,8 @@ class Instrument(object):
     def _mqtt_resend_from_db(self):
         # Resends messages not recieved from database
         # Should be run on aplication start up
-        messages = Message.select().where(Message.sent == False)
+        messages = self.session.query(Message).filter(Message.sent = False)
+        # messages = Message.select().where(Message.sent == False)
         self.log_message(module = 'database', msg = 'Resending '+ str(messages.count())+ ' messages')
         if messages:
             self._mqtt_messages_lost = True
@@ -308,7 +315,8 @@ class Instrument(object):
         # Update database sent status of messages
         # if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
         if self._mqtt_connected and self._mqtt_messages_lost and len(self._mqtt_client._out_messages) <= 1:
-            count = Message.update({Message.sent: True}).where(Message.sent == False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).execute()
+            count = Message.update().where(Message.sent == False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).values(sent = True)
+            # count = Message.update({Message.sent: True}).where(Message.sent == False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).execute()
             self._mqtt_messages_lost = False
             self.log_message(module = 'database:memory', msg = 'Sent '+ str(count)+ ' messages')
             gc.collect()
@@ -336,7 +344,8 @@ class Instrument(object):
         self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = data, level = logging.DEBUG ,send_mqtt = False)
 
         # Save the message in the local database
-        msg.save()
+        self.session.add(msg)
+        self.session.commit()
         # return True or false
         return msg.sent
 
@@ -400,15 +409,17 @@ class Instrument(object):
         # Get module
         return self._imodules[name]
 
-    def calculate_analisis():
+    def calculate_analisis(self):
         try:
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
-            t1 = Message.select().where(Message.countdown == 70).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t1 = self.session.query().filter(Message.countdown == 70).order_by(Message.timestamp.desc()).first().timestamp
+            # t1 = Message.select().where(Message.countdown == 70).order_by(Message.timestamp.desc()).limit(1).get().timestamp
             t0 = t1 - datetime.timedelta(seconds = 5)
             t2 = t1 + datetime.timedelta(seconds = 630)
-            baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where(Message.timestamp >= t0 and Message.timestamp <= t1).get().avg
+            baseline = self.session.query(func.AVG(Message.co2).alias('avg')).where(Message.timestamp >= t0 and Message.timestamp <= t1).get().avg
+            # baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where(Message.timestamp >= t0 and Message.timestamp <= t1).get().avg
             messages = Message.select(Message.co2, Message.flow, Message.runtime).where(Message.timestamp >= t1 and Message.timestamp <= t2)
             flowrate = messages.select(pw.fn.AVG(Message.flow).alias('avg')).get().avg
             for m in messages:
@@ -542,7 +553,7 @@ class Instrument(object):
                 self._mqtt_send_lost_messages()
                 data = self._read_data()
                 data['topic'] = self.mqtt_publish_topic
-                message = Message(**data)
+                message = Sample(**data)
                 self._mqtt_publish(message)
             except KeyboardInterrupt:
                 self.stop()
