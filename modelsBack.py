@@ -1,80 +1,48 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, Boolean, Float, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm import with_polymorphic
-import datetime, json
+# Created by Javier Curiel
+# Copyright (c) 2018 Javier Curiel. All rights reserved.
 
-engine = create_engine('sqlite:///local_store.db',connect_args={'check_same_thread':False})
-Base = declarative_base()
+import peewee as pw
+import datetime
+import json
 
-class Topic(Base):
-    __tablename__ = 'topic'
-    id = Column(Integer, primary_key=True)
-    value = Column(String(250))
-    messages = relationship('Message', back_populates="topic")
+db = pw.SqliteDatabase('local_store.db')
 
+# Base model implemented for use of the same database for all models
+class BaseModel(pw.Model):
+    class Meta:
+        database = db
 
-class Message(Base):
-    __tablename__ = 'message'
-    id = Column(Integer, primary_key=True)
-    type = Column(String(50))
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
-    sent = Column(Boolean)
-    topic_id = Column(Integer, ForeignKey('topic.id'))
-    topic = relationship("Topic", back_populates="messages")
-    __mapper_args__ = {
-        'polymorphic_identity':'message',
-        'polymorphic_on':type
-    }
+class Topic(BaseModel):
+    value = pw.CharField()
+
+class Message(BaseModel):
+    topic = pw.ForeignKeyField(Topic)
+    sent = pw.BooleanField(default = False)
+    timestamp = pw.DateTimeField(default=datetime.datetime.now)
+
+    runtime = pw.FloatField()
+    spoven = pw.FloatField()
+    toven = pw.FloatField()
+    spcoil = pw.FloatField()
+    tcoil = pw.FloatField()
+    spband = pw.FloatField()
+    tband = pw.FloatField()
+    spcat = pw.FloatField()
+    tcat = pw.FloatField()
+    tco2 = pw.FloatField()
+    pco2 = pw.FloatField()
+    co2 = pw.FloatField()
+    flow = pw.FloatField()
+    curr = pw.FloatField()
+    countdown = pw.FloatField()
+    statusbyte = pw.FloatField()
+
     def to_json(self):
-        omit = {'id','sent','topic','_sa_instance_state'}
-        data = {x: self.__dict__[x] for x in self.__dict__ if x not in omit}
+        omit = {'id','sent','topic'}
+        data = {x: self.__data__[x] for x in self.__data__ if x not in omit}
         data['timestamp'] = data['timestamp'].isoformat()
         json_data = json.dumps(data)
         return json_data
-
-
-class Analysis(Message):
-    __tablename__ = 'analysis'
-    id = Column(Integer, ForeignKey('message.id') ,primary_key=True)
-    cosa_nueva = Column(String(250))
-    total_carbon = Column(Float)
-    max_temp = Column(Float)
-    __mapper_args__ = {
-        'polymorphic_identity':'analysis',
-    }
-
-
-class Sample(Message):
-    __tablename__ = 'sample'
-    id = Column(Integer, ForeignKey('message.id') ,primary_key=True)
-    runtime = Column(Float)
-    spoven = Column(Float)
-    toven = Column(Float)
-    spcoil = Column(Float)
-    tcoil = Column(Float)
-    spband = Column(Float)
-    tband = Column(Float)
-    spcat = Column(Float)
-    tcat = Column(Float)
-    tco2 = Column(Float)
-    pco2 = Column(Float)
-    co2 = Column(Float)
-    flow = Column(Float)
-    curr = Column(Float)
-    countdown = Column(Float)
-    statusbyte = Column(Float)
-    __mapper_args__ = {
-        'polymorphic_identity':'sample'
-    }
-
-Base.metadata.create_all(engine)
-Base.metadata.bind = engine
-DBSession = sessionmaker(bind=engine)
-poly = with_polymorphic(Message, [Analysis, Sample])
-
 
 
 class IModule(object):

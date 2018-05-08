@@ -2,6 +2,7 @@
 # Created by Javier Curiel
 # Copyright (c) 2018 Javier Curiel. All rights reserved.
 
+
 from Models import Topic
 from Models import Message
 from Models import Sample
@@ -32,11 +33,22 @@ MQTT_TYPE_READING = '/devices/macbook-154505275890450/events'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
 MQTT_TYPE_STATUS = 'status'
 
-Topic.create_table(True)
-Message.create_table(True)
+# Topic.create_table(True)
+# Message.create_table(True)
+
 
 SingletonInstrument = None
 
+
+def get_or_create(session, model, **kwargs):
+    instance = session.query(model).filter_by(**kwargs).first()
+    if instance:
+        return instance
+    else:
+        instance = model(**kwargs)
+        session.add(instance)
+        session.commit()
+        return instance
 
 def memory_info():
     SingletonInstrument.memory_usage()
@@ -91,6 +103,7 @@ class Instrument(object):
         self.uuid = 'projects/api-project-516409951425/locations/europe-west1/registries/instruments/devices/macbook-154505275890450'
         # self.event_topic = '/devices/macbook-154505275890450/events'
         # self.config_topic = '/devices/macbook-154505275890450/config'
+        self.session = DBSession()
 
         self.mqtt_host = kwargs.get('mqtt_host')
         self.mqtt_port = kwargs.get('mqtt_port')
@@ -110,7 +123,7 @@ class Instrument(object):
         self._mqtt_retain = False
         self._mqtt_messages_lost = False
 
-        self.session = DBSession()
+
 
         # Depending on memory size this is approx 400 MB of memory
         self._mqtt_max_queue = 100000
@@ -302,9 +315,10 @@ class Instrument(object):
     def _mqtt_resend_from_db(self):
         # Resends messages not recieved from database
         # Should be run on aplication start up
-        messages = self.session.query(Message).filter(Message.sent = False)
-        # messages = Message.select().where(Message.sent == False)
-        self.log_message(module = 'database', msg = 'Resending '+ str(messages.count())+ ' messages')
+        # print(Message)
+        query = self.session.query(Message).filter_by(sent = False)
+        messages = query.all()
+        self.log_message(module = 'database', msg = 'Resending '+ str(query.count())+ ' messages')
         if messages:
             self._mqtt_messages_lost = True
         for msg in messages:
@@ -315,8 +329,9 @@ class Instrument(object):
         # Update database sent status of messages
         # if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
         if self._mqtt_connected and self._mqtt_messages_lost and len(self._mqtt_client._out_messages) <= 1:
-            count = Message.update().where(Message.sent == False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).values(sent = True)
-            # count = Message.update({Message.sent: True}).where(Message.sent == False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).execute()
+            query = self.session.query(Message).filter_by(sent = False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).with_for_update()
+            update = Message.__table__.update().values({'sent': True}).where(Message.id == query.as_scalar())
+            count = query.count()
             self._mqtt_messages_lost = False
             self.log_message(module = 'database:memory', msg = 'Sent '+ str(count)+ ' messages')
             gc.collect()
@@ -362,7 +377,8 @@ class Instrument(object):
         # elif t != '#':
         #     final_value += '/fmt/json'
         # If topic was already in database the get if not create
-        topic, _ = Topic.get_or_create(value = final_value)
+        topic = get_or_create(self.session, Topic, value = final_value)
+        # topic = Topic.get_or_create(value = final_value)
         return topic
 
     @property
