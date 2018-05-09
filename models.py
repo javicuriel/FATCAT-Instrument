@@ -15,27 +15,33 @@ class BaseModel(pw.Model):
 class Topic(BaseModel):
     value = pw.CharField()
 
+
 class Message(BaseModel):
     topic = pw.ForeignKeyField(Topic)
     sent = pw.BooleanField(default = False)
     timestamp = pw.DateTimeField(default=datetime.datetime.now)
 
-    runtime = pw.FloatField()
-    spoven = pw.FloatField()
-    toven = pw.FloatField()
-    spcoil = pw.FloatField()
-    tcoil = pw.FloatField()
-    spband = pw.FloatField()
-    tband = pw.FloatField()
-    spcat = pw.FloatField()
-    tcat = pw.FloatField()
-    tco2 = pw.FloatField()
-    pco2 = pw.FloatField()
-    co2 = pw.FloatField()
-    flow = pw.FloatField()
-    curr = pw.FloatField()
-    countdown = pw.FloatField()
-    statusbyte = pw.FloatField()
+    sample = pw.BooleanField(default = True)
+
+    runtime = pw.FloatField(null = True)
+    spoven = pw.FloatField(null = True)
+    toven = pw.FloatField(null = True)
+    spcoil = pw.FloatField(null = True)
+    tcoil = pw.FloatField(null = True)
+    spband = pw.FloatField(null = True)
+    tband = pw.FloatField(null = True)
+    spcat = pw.FloatField(null = True)
+    tcat = pw.FloatField(null = True)
+    tco2 = pw.FloatField(null = True)
+    pco2 = pw.FloatField(null = True)
+    co2 = pw.FloatField(null = True)
+    flow = pw.FloatField(null = True)
+    curr = pw.FloatField(null = True)
+    countdown = pw.FloatField(null = True)
+    statusbyte = pw.FloatField(null = True)
+
+    total_carbon = pw.FloatField(null = True)
+    max_temp = pw.FloatField(null = True)
 
     def to_json(self):
         omit = {'id','sent','topic'}

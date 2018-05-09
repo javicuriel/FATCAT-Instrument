@@ -17,7 +17,7 @@ import sys
 import gc
 import re
 import ssl
-
+import peewee as pw
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -25,6 +25,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 # MQTT_TYPE_READING = 'iot-2/evt/reading'
 MQTT_TYPE_READING = '/devices/macbook-154505275890450/events'
+MQTT_TYPE_ANALYSIS = '/devices/macbook-154505275890450/events/analysis'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
 MQTT_TYPE_STATUS = 'status'
 
@@ -93,6 +94,7 @@ class Instrument(object):
         self.mqtt_keep_alive = kwargs.get('mqtt_keep_alive')
         self.mqtt_qos = kwargs.get('mqtt_qos')
         self.mqtt_publish_topic = ''
+        self.mqtt_analysis_topic = self._create_topic(topic_type = MQTT_TYPE_ANALYSIS)
 
         self.serial_port_description = kwargs.get('serial_port_description')
         self.serial_baudrate = kwargs.get('serial_baudrate')
@@ -400,25 +402,30 @@ class Instrument(object):
         # Get module
         return self._imodules[name]
 
-    def calculate_analisis():
+    def calculate_analisis(self):
         try:
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
-            t1 = Message.select().where(Message.countdown == 70).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t1 = Message.select().where(Message.sample == True and Message.countdown == 70).order_by(Message.timestamp.desc()).limit(1).get().timestamp
             t0 = t1 - datetime.timedelta(seconds = 5)
             t2 = t1 + datetime.timedelta(seconds = 630)
-            baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where(Message.timestamp >= t0 and Message.timestamp <= t1).get().avg
-            messages = Message.select(Message.co2, Message.flow, Message.runtime).where(Message.timestamp >= t1 and Message.timestamp <= t2)
-            flowrate = messages.select(pw.fn.AVG(Message.flow).alias('avg')).get().avg
+            baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where((Message.sample == True)&(Message.timestamp >= t0)&(Message.timestamp <= t1)).get().avg
+            messages = Message.select().where((Message.sample == True)&(Message.timestamp >= t1)&(Message.timestamp <= t2))
+            flowrate = messages.select(pw.fn.AVG(Message.flow).alias('avg')).where((Message.sample == True)&(Message.timestamp >= t1)&(Message.timestamp <= t2)).get().avg
+            max_temp = messages.select(pw.fn.MAX(Message.toven).alias('max')).where((Message.sample == True)&(Message.timestamp >= t1)&(Message.timestamp <= t2)).get().max
             for m in messages:
                 co2.append((m.co2 - baseline)*ppmtoug)
                 runtime.append(m.runtime)
             deltatc = np.array(co2)*flowrate
             total_carbon = np.trapz(deltatc, x=np.array(runtime))
-            print(total_carbon)
+            timestamp = datetime.datetime.utcnow()
+            message = Message(topic = self.mqtt_analysis_topic,timestamp = timestamp, total_carbon = total_carbon, max_temp = max_temp, sample = False)
+            self._mqtt_publish(message)
+
         except Exception as e:
-            print("ERROR OCURRED")
+            print("ERROR OCURRED"+str(e))
+
 
 
     def _run_actions(self, event_name, actions):
@@ -435,6 +442,7 @@ class Instrument(object):
             else:
                 raise ValueError("Invalid action type:" + action_type)
         # Calculate analysis
+        self.calculate_analisis()
 
     def run_mode(self, name):
         # Run mode actions
