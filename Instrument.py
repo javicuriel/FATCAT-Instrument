@@ -23,7 +23,6 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 
-# MQTT_TYPE_READING = 'iot-2/evt/reading'
 MQTT_TYPE_READING = '/devices/macbook-154505275890450/events'
 MQTT_TYPE_ANALYSIS = '/devices/macbook-154505275890450/events/analysis'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
@@ -34,10 +33,11 @@ Message.create_table(True)
 
 SingletonInstrument = None
 
+def refresh_token():
+    password = create_jwt('api-project-516409951425', 'rsa_private.pem', 'RS256')
 
 def memory_info():
     SingletonInstrument.memory_usage()
-
 
 def helper_run_job(event_name, actions):
     # Helper function tu run a job
@@ -152,7 +152,10 @@ class Instrument(object):
         scheduler = BackgroundScheduler(jobstores = jobstores)
         scheduler.name = 'apscheduler'
         self._setup_logger(scheduler.name)
+
         # scheduler.add_job(memory_info, 'interval', seconds= 5 , name = 'memory', id = 'memory', replace_existing=True)
+        scheduler.add_job(refresh_token, 'interval', hours = 1 , name = 'refresh_token', id = 'refresh_token', replace_existing=True)
+
         return scheduler
 
     def _setup_logger(self, name):
@@ -237,6 +240,8 @@ class Instrument(object):
 
         return client
 
+    def set_token(self, token):
+        self._mqtt_client.username_pw_set(username='unused',password=token)
 
     def _set_up_serial(self):
         # Waits 2 seconds before trying again if no port found

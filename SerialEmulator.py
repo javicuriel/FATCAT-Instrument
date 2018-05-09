@@ -62,7 +62,7 @@ class SerialEmulator:
     # reads characters from the fake Arduino until a \n is found.
     def readline( self ):
         # time.sleep(.25)
-        time.sleep(10)
+        time.sleep(.5)
         returnIndex = self._data.index( "\n" )
         if returnIndex != -1:
             s = self._data[0:returnIndex+1]
