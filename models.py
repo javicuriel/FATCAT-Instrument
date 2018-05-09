@@ -3,6 +3,7 @@
 
 import peewee as pw
 import datetime
+import json
 
 db = pw.SqliteDatabase('local_store.db')
 
@@ -14,11 +15,40 @@ class BaseModel(pw.Model):
 class Topic(BaseModel):
     value = pw.CharField()
 
+
 class Message(BaseModel):
     topic = pw.ForeignKeyField(Topic)
-    payload = pw.CharField()
     sent = pw.BooleanField(default = False)
     timestamp = pw.DateTimeField(default=datetime.datetime.now)
+
+    sample = pw.BooleanField(default = True)
+
+    runtime = pw.FloatField(null = True)
+    spoven = pw.FloatField(null = True)
+    toven = pw.FloatField(null = True)
+    spcoil = pw.FloatField(null = True)
+    tcoil = pw.FloatField(null = True)
+    spband = pw.FloatField(null = True)
+    tband = pw.FloatField(null = True)
+    spcat = pw.FloatField(null = True)
+    tcat = pw.FloatField(null = True)
+    tco2 = pw.FloatField(null = True)
+    pco2 = pw.FloatField(null = True)
+    co2 = pw.FloatField(null = True)
+    flow = pw.FloatField(null = True)
+    curr = pw.FloatField(null = True)
+    countdown = pw.FloatField(null = True)
+    statusbyte = pw.FloatField(null = True)
+
+    total_carbon = pw.FloatField(null = True)
+    max_temp = pw.FloatField(null = True)
+
+    def to_json(self):
+        omit = {'id','sent','topic'}
+        data = {x: self.__data__[x] for x in self.__data__ if x not in omit and self.__data__[x] != None}
+        data['timestamp'] = data['timestamp'].isoformat()
+        json_data = json.dumps(data)
+        return json_data
 
 
 class IModule(object):

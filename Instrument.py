@@ -17,12 +17,15 @@ import re
 import ssl
 import jwt
 import json
+import peewee as pw
+import numpy as np
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 
 MQTT_TYPE_READING = 'iot-2/evt/reading'
+MQTT_TYPE_ANALYSIS = 'iot-2/evt/analysis'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
 MQTT_TYPE_STATUS = 'status'
 
@@ -31,41 +34,9 @@ Message.create_table(True)
 
 SingletonInstrument = None
 
-def create_jwt(project_id, private_key_file, algorithm):
-    """Creates a JWT (https://jwt.io) to establish an MQTT connection.
-        Args:
-         project_id: The cloud project ID this device belongs to
-         private_key_file: A path to a file containing either an RSA256 or
-                 ES256 private key.
-         algorithm: The encryption algorithm to use. Either 'RS256' or 'ES256'
-        Returns:
-            An MQTT generated from the given project_id and private key, which
-            expires in 20 minutes. After 20 minutes, your client will be
-            disconnected, and a new JWT will have to be generated.
-        Raises:
-            ValueError: If the private_key_file does not contain a known key.
-        """
-
-    token = {
-            # The time that the token was issued at
-            'iat': datetime.datetime.utcnow(),
-            # The time the token expires.
-            'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=60),
-            # The audience field should always be set to the GCP project id.
-            'aud': project_id
-    }
-
-    # Read the private key file.
-    with open(private_key_file, 'r') as f:
-        private_key = f.read()
-
-    print('Creating JWT using {} from private key file {}'.format(
-            algorithm, private_key_file))
-
-    return jwt.encode(token, private_key, algorithm=algorithm)
-
 def memory_info():
     SingletonInstrument.memory_usage()
+
 
 def to_json(msg):
     array_msg = msg.payload.rstrip().split('\t')
@@ -83,6 +54,7 @@ def to_json(msg):
 def helper_run_job(event_name, actions):
     # Helper function tu run a job
     SingletonInstrument._run_actions(event_name, actions)
+    SingletonInstrument.calculate_analisis()
 
 def convert_to_seconds(unit, value):
     """
@@ -135,6 +107,7 @@ class Instrument(object):
         self.mqtt_keep_alive = kwargs.get('mqtt_keep_alive')
         self.mqtt_qos = kwargs.get('mqtt_qos')
         self.mqtt_publish_topic = ''
+        self.mqtt_analysis_topic = self._create_topic(topic_type = MQTT_TYPE_ANALYSIS)
 
         self.serial_port_description = kwargs.get('serial_port_description')
         self.serial_baudrate = kwargs.get('serial_baudrate')
@@ -355,7 +328,8 @@ class Instrument(object):
 
     def _mqtt_publish(self, msg):
         # Publish the message to the server and store result in msg_info
-        msg_info = self._mqtt_client.publish(msg.topic.value, to_json(msg), qos = self.mqtt_qos, retain = self._mqtt_retain)
+        data = msg.to_json()
+        msg_info = self._mqtt_client.publish(msg.topic.value, data, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
         # If sent is successful, set sent flag to true
         if msg_info.rc == mqtt.MQTT_ERR_SUCCESS:
@@ -368,10 +342,10 @@ class Instrument(object):
             elif msg_info.rc == mqtt.MQTT_ERR_QUEUE_SIZE:
                 mqtt_err = '[MQTT_ERR_QUEUE_SIZE]'
         # Debug log for mqtt messages
-        self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = msg.payload.replace("\t", " "), level = logging.DEBUG ,send_mqtt = False)
+        self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = data, level = logging.DEBUG ,send_mqtt = False)
 
         # Save the message in the local database
-        # msg.save()
+        msg.save()
         # return True or false
         return msg.sent
 
@@ -404,7 +378,20 @@ class Instrument(object):
         if not self._serial:
             raise ValueError('Serial is not set!')
 
-        return self._serial.readline().rstrip('\n')
+        data = self._serial.readline().rstrip('\n').split('\t')
+
+        timestamp = datetime.datetime.utcnow()
+
+        keys = ["runtime","spoven","toven","spcoil","tcoil","spband","tband","spcat","tcat","tco2","pco2","co2","flow","curr","countdown","statusbyte"]
+
+        dict_data = {}
+        dict_data['timestamp'] = timestamp
+
+        for i,key in enumerate(keys):
+            dict_data[key] = float(data[i])
+
+
+        return dict_data
 
     def add_module(self, imodule):
         # Adds modules to instrument imodules and sets its serial
@@ -421,6 +408,31 @@ class Instrument(object):
         # Try (*maybe)
         # Get module
         return self._imodules[name]
+
+    def calculate_analisis(self):
+        try:
+            ppmtoug = 12.01/22.4
+            co2 = []
+            runtime = []
+            t1 = Message.select().where(Message.sample == True and Message.countdown == 0).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t0 = t1 - datetime.timedelta(seconds = 5)
+            t2 = t1 + datetime.timedelta(seconds = 630)
+            baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where((Message.sample == True)&(Message.timestamp >= t0)&(Message.timestamp <= t1)).get().avg
+            messages = Message.select().where((Message.sample == True)&(Message.timestamp >= t1)&(Message.timestamp <= t2))
+            flowrate = messages.select(pw.fn.AVG(Message.flow).alias('avg')).where((Message.sample == True)&(Message.timestamp >= t1)&(Message.timestamp <= t2)).get().avg
+            max_temp = messages.select(pw.fn.MAX(Message.toven).alias('max')).where((Message.sample == True)&(Message.timestamp >= t1)&(Message.timestamp <= t2)).get().max
+            for m in messages:
+                co2.append((m.co2 - baseline)*ppmtoug)
+                runtime.append(m.runtime)
+            deltatc = np.array(co2)*flowrate
+            total_carbon = np.trapz(deltatc, x=np.array(runtime))
+            timestamp = datetime.datetime.utcnow()
+            message = Message(topic = self.mqtt_analysis_topic,timestamp = timestamp, total_carbon = total_carbon, max_temp = max_temp, sample = False)
+
+            self._mqtt_publish(message)
+
+        except Exception as e:
+            print("ERROR OCURRED"+str(e))
 
     def _run_actions(self, event_name, actions):
         # Runs a list of actions given in tuple form: (action_type, name, value)
@@ -540,8 +552,8 @@ class Instrument(object):
             try:
                 self._mqtt_send_lost_messages()
                 data = self._read_data()
-                timestamp = self._get_timestamp()
-                message = Message(topic = self.mqtt_publish_topic, payload = data, timestamp = timestamp)
+                data['topic'] = self.mqtt_publish_topic
+                message = Message(**data)
                 self._mqtt_publish(message)
             except KeyboardInterrupt:
                 self.stop()
