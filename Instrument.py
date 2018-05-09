@@ -42,6 +42,7 @@ def memory_info():
 def helper_run_job(event_name, actions):
     # Helper function tu run a job
     SingletonInstrument._run_actions(event_name, actions)
+    SingletonInstrument.calculate_analisis()
 
 def convert_to_seconds(unit, value):
     """
@@ -322,6 +323,8 @@ class Instrument(object):
     def _mqtt_publish(self, msg):
         # Publish the message to the server and store result in msg_info
         data = msg.to_json()
+        if not msg.sample:
+            print(data)
         msg_info = self._mqtt_client.publish(msg.topic.value, data, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
         # If sent is successful, set sent flag to true
@@ -407,7 +410,7 @@ class Instrument(object):
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
-            t1 = Message.select().where(Message.sample == True and Message.countdown == 70).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t1 = Message.select().where(Message.sample == True and Message.countdown == 0).order_by(Message.timestamp.desc()).limit(1).get().timestamp
             t0 = t1 - datetime.timedelta(seconds = 5)
             t2 = t1 + datetime.timedelta(seconds = 630)
             baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where((Message.sample == True)&(Message.timestamp >= t0)&(Message.timestamp <= t1)).get().avg
@@ -441,8 +444,6 @@ class Instrument(object):
                 time.sleep(convert_to_seconds(name, int(value)))
             else:
                 raise ValueError("Invalid action type:" + action_type)
-        # Calculate analysis
-        self.calculate_analisis()
 
     def run_mode(self, name):
         # Run mode actions
