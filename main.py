@@ -15,9 +15,12 @@ def main():
     if os.path.exists(config_file):
         global instrument
         instrument = get_instrument_config_file()
-        # instrument.add_mode('analisis', ['module:licor:on', 'module:extp:off', 'module:valve:on', 'module:pump:on'])
-        # instrument.add_mode('sampling', ['module:pump:off', 'module:valve:off', 'module:extp:on', 'module:licor:off'])
-        # mqtt_add_mode = "licor:on,extp:off,valve:on,pump:on"
+        instrument.add_mode('analisis', ['module:licor:on', 'module:extp:off', 'module:valve:on', 'module:pump:on'])
+        instrument.add_mode('sampling', ['module:pump:off', 'module:valve:off', 'module:extp:on', 'module:licor:off'])
+
+        # acts = ['mode:analisis', 'wait:seconds:1', 'module:oven:on', 'wait:seconds:1', 'mode:sampling']
+        # tuple_actions = instrument._get_tuple_actions(acts)
+        # instrument._run_actions("analysis", tuple_actions)
 
         if args.debug:
             logging.getLogger(instrument.name).setLevel(logging.DEBUG)

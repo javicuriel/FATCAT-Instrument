@@ -10,6 +10,7 @@ from Models import Analysis
 from Models import IModule
 from Models import DBSession
 from Models import poly
+from sqlalchemy.sql import func
 from google_cloud import *
 from uuid import getnode as get_mac
 import paho.mqtt.client as mqtt
@@ -30,6 +31,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 # MQTT_TYPE_READING = 'iot-2/evt/reading'
 MQTT_TYPE_READING = '/devices/macbook-154505275890450/events'
+MQTT_TYPE_ANALYSIS = '/devices/macbook-154505275890450/events/analysis'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
 MQTT_TYPE_STATUS = 'status'
 
@@ -103,13 +105,15 @@ class Instrument(object):
         self.uuid = 'projects/api-project-516409951425/locations/europe-west1/registries/instruments/devices/macbook-154505275890450'
         # self.event_topic = '/devices/macbook-154505275890450/events'
         # self.config_topic = '/devices/macbook-154505275890450/config'
+
         self.session = DBSession()
 
         self.mqtt_host = kwargs.get('mqtt_host')
         self.mqtt_port = kwargs.get('mqtt_port')
         self.mqtt_keep_alive = kwargs.get('mqtt_keep_alive')
         self.mqtt_qos = kwargs.get('mqtt_qos')
-        self.mqtt_publish_topic = ''
+        self.mqtt_publish_topic = self._create_topic(topic_type = MQTT_TYPE_READING)
+        self.mqtt_analysis_topic = self._create_topic(topic_type = MQTT_TYPE_ANALYSIS)
 
         self.serial_port_description = kwargs.get('serial_port_description')
         self.serial_baudrate = kwargs.get('serial_baudrate')
@@ -313,10 +317,11 @@ class Instrument(object):
 
 
     def _mqtt_resend_from_db(self):
+        pass
         # Resends messages not recieved from database
         # Should be run on aplication start up
-        # print(Message)
-        query = self.session.query(Message).filter_by(sent = False)
+        session = DBSession()
+        query = session.query(Message).filter_by(sent = False)
         messages = query.all()
         self.log_message(module = 'database', msg = 'Resending '+ str(query.count())+ ' messages')
         if messages:
@@ -325,11 +330,13 @@ class Instrument(object):
             self._mqtt_publish(msg)
 
     def _mqtt_send_lost_messages(self):
+        pass
         # If client is connected, all messages stored in memory where sent, and there was messages lost
         # Update database sent status of messages
         # if self._mqtt_connected and self._mqtt_messages_lost and not self._mqtt_client._out_messages:
         if self._mqtt_connected and self._mqtt_messages_lost and len(self._mqtt_client._out_messages) <= 1:
-            query = self.session.query(Message).filter_by(sent = False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).with_for_update()
+            session = DBSession()
+            query = session.query(Message).filter_by(sent = False).order_by(Message.timestamp.asc()).limit(self._mqtt_max_queue).with_for_update()
             update = Message.__table__.update().values({'sent': True}).where(Message.id == query.as_scalar())
             count = query.count()
             self._mqtt_messages_lost = False
@@ -359,8 +366,11 @@ class Instrument(object):
         self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = data, level = logging.DEBUG ,send_mqtt = False)
 
         # Save the message in the local database
+        if(isinstance(msg, Analysis)):
+            self.session.merge(msg)
         self.session.add(msg)
         self.session.commit()
+
         # return True or false
         return msg.sent
 
@@ -377,17 +387,18 @@ class Instrument(object):
         # elif t != '#':
         #     final_value += '/fmt/json'
         # If topic was already in database the get if not create
+        # session = DBSession()
         topic = get_or_create(self.session, Topic, value = final_value)
         # topic = Topic.get_or_create(value = final_value)
         return topic
 
-    @property
-    def mqtt_publish_topic(self):
-        return self._mqtt_publish_topic
-
-    @mqtt_publish_topic.setter
-    def mqtt_publish_topic(self, value):
-        self._mqtt_publish_topic = self._create_topic(topic_type = MQTT_TYPE_READING)
+    # @property
+    # def mqtt_publish_topic(self):
+    #     return self._mqtt_publish_topic
+    #
+    # @mqtt_publish_topic.setter
+    # def mqtt_publish_topic(self, value):
+    #     self._mqtt_publish_topic = self._create_topic(topic_type = MQTT_TYPE_READING)
 
     def _read_data(self):
         # Read line from serial and remove \n character
@@ -425,27 +436,31 @@ class Instrument(object):
         # Get module
         return self._imodules[name]
 
-    def calculate_analisis(self):
+    def calculate_analysis(self):
         try:
+            # session = DBSession()
+            session = self.session
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
-            t1 = self.session.query().filter(Message.countdown == 70).order_by(Message.timestamp.desc()).first().timestamp
-            # t1 = Message.select().where(Message.countdown == 70).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t1 = session.query(Sample).filter(Sample.countdown == 70).order_by(Sample.timestamp.desc()).first().timestamp
             t0 = t1 - datetime.timedelta(seconds = 5)
             t2 = t1 + datetime.timedelta(seconds = 630)
-            baseline = self.session.query(func.AVG(Message.co2).alias('avg')).where(Message.timestamp >= t0 and Message.timestamp <= t1).get().avg
-            # baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where(Message.timestamp >= t0 and Message.timestamp <= t1).get().avg
-            messages = Message.select(Message.co2, Message.flow, Message.runtime).where(Message.timestamp >= t1 and Message.timestamp <= t2)
-            flowrate = messages.select(pw.fn.AVG(Message.flow).alias('avg')).get().avg
-            for m in messages:
-                co2.append((m.co2 - baseline)*ppmtoug)
-                runtime.append(m.runtime)
+            baseline = session.query(func.avg(Sample.co2).label('avg')).filter(Sample.timestamp >= t0).filter(Sample.timestamp <= t1).one().avg
+            samples = session.query(Sample.co2, Sample.runtime).filter(Sample.timestamp >= t1).filter(Sample.timestamp <= t2).all()
+            flowrate = session.query(func.avg(Sample.flow).label('avg')).filter(Sample.timestamp >= t1).filter(Sample.timestamp <= t2).one().avg
+            max_temp = session.query(func.max(Sample.toven).label('max')).filter(Sample.timestamp >= t1).filter(Sample.timestamp <= t2).one().max
+            for s in samples:
+                co2.append((s.co2 - baseline)*ppmtoug)
+                runtime.append(s.runtime)
             deltatc = np.array(co2)*flowrate
             total_carbon = np.trapz(deltatc, x=np.array(runtime))
-            print(total_carbon)
+            timestamp = datetime.datetime.utcnow()
+            message = Analysis(topic = self.mqtt_analysis_topic,timestamp = timestamp, total_carbon = total_carbon, max_temp = max_temp)
+            self._mqtt_publish(message)
         except Exception as e:
-            print("ERROR OCURRED")
+            raise(e)
+            # print("ERROR OCURRED "+str(e))
 
 
     def _run_actions(self, event_name, actions):
@@ -462,6 +477,7 @@ class Instrument(object):
             else:
                 raise ValueError("Invalid action type:" + action_type)
         # Calculate analysis
+        self.calculate_analysis()
 
     def run_mode(self, name):
         # Run mode actions

@@ -21,7 +21,7 @@ class Message(Base):
     id = Column(Integer, primary_key=True)
     type = Column(String(50))
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
-    sent = Column(Boolean)
+    sent = Column(Boolean, unique=False, default=True)
     topic_id = Column(Integer, ForeignKey('topic.id'))
     topic = relationship("Topic", back_populates="messages")
     __mapper_args__ = {
@@ -39,7 +39,6 @@ class Message(Base):
 class Analysis(Message):
     __tablename__ = 'analysis'
     id = Column(Integer, ForeignKey('message.id') ,primary_key=True)
-    cosa_nueva = Column(String(250))
     total_carbon = Column(Float)
     max_temp = Column(Float)
     __mapper_args__ = {
