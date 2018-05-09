@@ -29,7 +29,4 @@ def create_jwt(project_id, private_key_file, algorithm):
     with open(private_key_file, 'r') as f:
         private_key = f.read()
 
-    print('Creating JWT using {} from private key file {}'.format(
-            algorithm, private_key_file))
-
     return jwt.encode(token, private_key, algorithm=algorithm)
