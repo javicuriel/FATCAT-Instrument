@@ -38,19 +38,6 @@ def memory_info():
     SingletonInstrument.memory_usage()
 
 
-def to_json(msg):
-    array_msg = msg.payload.rstrip().split('\t')
-    keys = ["runtime","spoven","toven","spcoil","tcoil","spband","tband","spcat","tcat","tco2","pco2","co2","flow","curr","countdown","statusbyte"]
-    data = {}
-    data['timestamp'] = str(msg.timestamp)
-    for i,key in enumerate(keys):
-        data[key] = float(array_msg[i])
-
-    json_data = json.dumps(data)
-
-    return json_data
-
-
 def helper_run_job(event_name, actions):
     # Helper function tu run a job
     SingletonInstrument._run_actions(event_name, actions)
