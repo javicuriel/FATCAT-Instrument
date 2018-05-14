@@ -44,7 +44,7 @@ class Message(BaseModel):
     max_temp = pw.FloatField(null = True)
 
     def to_json(self):
-        omit = {'id','sent','topic'}
+        omit = {'id','sent','topic','sample'}
         data = {x: self.__data__[x] for x in self.__data__ if x not in omit and self.__data__[x] != None}
         data['timestamp'] = data['timestamp'].isoformat()
         json_data = json.dumps(data)
