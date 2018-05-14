@@ -79,16 +79,8 @@ class Instrument(object):
         if SingletonInstrument:
             raise ValueError("SingletonInstrument already set")
 
-        # self.uuid = str(get_mac())
-        self.uuid = "test_id"
-
         self.name = 'instrument'
-
-        # GOOGLE CLOUD
-        # self.uuid = 'projects/api-project-516409951425/locations/europe-west1/registries/instruments/devices/macbook-154505275890450'
-        # self.config_topic = '/devices/macbook-154505275890450/config'
-        # self.event_topic = '/devices/macbook-154505275890450/events'
-
+        self.uuid = os.environ["MQTT_UUID"]
         self.mqtt_host = kwargs.get('mqtt_host')
         self.mqtt_port = kwargs.get('mqtt_port')
         self.mqtt_keep_alive = kwargs.get('mqtt_keep_alive')

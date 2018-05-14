@@ -25,22 +25,6 @@ def main():
 
         instrument.start()
 
-def otro_analisis():
-    print("Otro analisis cada 6 segundos")
-
-
-def run_analysis():
-    # ANALYSIS_MODE
-    instrument.run_mode('analisis')
-    # OVEN
-    # time.sleep(5)
-    instrument.run_action('oven', 'on')
-    # time.sleep(27*MINUTE)
-    instrument.run_action('oven', 'on')
-    # SAMPLING_MODE
-    instrument.run_mode('sampling')
-
-
 
 # Sets up instrument with config file settings
 def get_instrument_config_file():
