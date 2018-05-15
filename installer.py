@@ -7,9 +7,9 @@ config_file = "/etc/systemd/system/instrument.service"
 # config_file = "./instrument.service"
 
 def create_script(uuid, auth_token):
-    setup = "[Unit]\nDescription=Carbon measurement system\nAfter=network.target\n\n[Service]\nExecStart=/usr/bin/python3 -u main.py\nWorkingDirectory=/GAW-Instrument/\nEnvironment=MQTT_UUID=%s\nEnvironment=IBM_TOKEN=%s\nStandardOutput=inherit\nStandardError=inherit\nRestart=always\nRestartSec=2\n\n[Install]\nWantedBy=sysinit.target"
+    setup = "[Unit]\nDescription=Carbon measurement system\nAfter=network.target\n\n[Service]\nExecStart=/usr/bin/python -u main.py\nWorkingDirectory=/GAW-Instrument/\nEnvironment=MQTT_UUID=%s\nEnvironment=IBM_TOKEN=%s\nStandardOutput=inherit\nStandardError=inherit\nRestart=always\nRestartSec=2\n\n[Install]\nWantedBy=sysinit.target"
     file = open(config_file, "w+")
-    file.write(setup % ("'"+uuid+"'", "'"+auth_token+"'"))
+    file.write(setup % (uuid, auth_token))
 
 def main():
     if os.path.exists(config_file):
