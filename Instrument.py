@@ -280,7 +280,7 @@ class Instrument(object):
     def _mqtt_on_disconnect(self, *args, **kwargs):
         # Set _mqtt_connected flag to false and log it
         self._mqtt_connected = False
-        self.log_message(module = 'mqttclient', msg = 'disconnected')
+        self.log_message(module = 'mqttclient', msg = 'disconnected '+ mqtt.connack_string(args[2]))
 
 
     def _mqtt_resend_from_db(self):
