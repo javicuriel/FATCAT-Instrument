@@ -1,6 +1,6 @@
 from Instrument import Instrument
 from SerialEmulator import SerialEmulator
-from Models import IModule
+from models import IModule
 import serial, os.path, configparser, argparse, logging, time
 import json
 
