@@ -39,7 +39,7 @@ def main():
                 username = raw_input("Enter username for CarbonMeasurmentApplication: ")
                 password = getpass.getpass('Enter password:')
                 data = {'deviceId': uuid, 'location': location, 'lat': lat, 'long': long}
-                api = 'http://localhost:3000/instruments/add'
+                api = 'https://carbonmeasurmentsystem.eu-gb.mybluemix.net/instruments/add'
                 response = requests.post(api, data=data, auth=(username,password))
                 if(response.status_code == 200):
                     create_script(uuid, response.text)
