@@ -2,9 +2,9 @@
 # Created by Javier Curiel
 # Copyright (c) 2018 Javier Curiel. All rights reserved.
 
-from Models import Topic
-from Models import Message
-from Models import IModule
+from models import Topic
+from models import Message
+from models import IModule
 from uuid import getnode as get_mac
 import paho.mqtt.client as mqtt
 import serial
