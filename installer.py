@@ -32,7 +32,7 @@ def main():
             if(val == 1):
                 # TODO
                 # Stop serial data flow and ask for id
-                uuid = "super_cool_id_nuevo_siii"
+                uuid = raw_input("Enter UUID: ")
                 location = raw_input("Enter location: ")
                 lat = raw_input("Enter latitude: ")
                 long = raw_input("Enter longitude: ")
@@ -44,6 +44,8 @@ def main():
                 if(response.status_code == 200):
                     create_script(uuid, response.text)
                     os.system("sudo pip install -r requirements.txt")
+                    os.system("sudo systemctl enable instrument.service")
+                    os.system("sudo systemctl start instrument.service")
                     print("Instrument setup was successfull!")
                 else:
                     print("Error occurred")
