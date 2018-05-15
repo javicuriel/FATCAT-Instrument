@@ -15,7 +15,6 @@ import sys
 import gc
 import re
 import ssl
-import jwt
 import json
 import peewee as pw
 import numpy as np
