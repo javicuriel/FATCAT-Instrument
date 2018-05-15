@@ -1,14 +1,25 @@
-import os.path
 import os
 import requests
 import getpass
 
-def set_enviroment_variables(uuid, auth_token):
-    os.system("echo '\n# For MQTT Client Autentication' >>~/.bash_profile")
-    os.system("echo export MQTT_UUID=\\'"+uuid+"\\' >>~/.bash_profile")
-    os.system("echo export IBM_TOKEN=\\'"+auth_token+"\\' >>~/.bash_profile")
 
-if not (os.environ.get("MQTT_UUID") and os.environ.get("IBM_TOKEN")):
+# config_file = "/etc/systemd/system/instrument.service"
+config_file = "./instrument.service"
+
+def create_script(uuid, auth_token):
+    setup = "[Unit]\nDescription=Carbon measurement system\nAfter=network.target\n\n[Service]\nExecStart=/usr/bin/python3 -u main.py\nWorkingDirectory=/GAW-Instrument/\nEnvironment=MQTT_UUID=%s\nEnvironment=IBM_TOKEN=%s\nStandardOutput=inherit\nStandardError=inherit\nRestart=always\nRestartSec=2\n\n[Install]\nWantedBy=sysinit.target"
+    file = open(config_file, "w+")
+    file.write(setup % ("'"+uuid+"'", "'"+auth_token+"'"))
+
+def main():
+    if os.path.exists(config_file):
+        print("Installation is already complete")
+        print("Check: "+config_file)
+        return
+    if os.getuid() != 0:
+        print("Script must be run with sudo!")
+        return
+
     print("Welcome to FATCAT-Py Installer")
     print("It appears this is the first time the application is run.")
     print("Would you like to do a Automatic Setup?")
@@ -31,21 +42,22 @@ if not (os.environ.get("MQTT_UUID") and os.environ.get("IBM_TOKEN")):
                 api = 'http://localhost:3000/instruments/add'
                 response = requests.post(api, data=data, auth=(username,password))
                 if(response.status_code == 200):
-                    set_enviroment_variables(uuid, response.text)
+                    create_script(uuid, response.text)
+                    os.system("sudo pip install -r requirements.txt")
                     print("Instrument setup was successfull!")
                 else:
+                    print("Error occurred")
                     print(response.text)
-                break
+                return
             elif(val == 2):
                 uuid = raw_input("Enter UUID: ")
                 auth_token = raw_input("Enter Token: ")
-                set_enviroment_variables(uuid, auth_token)
-                break
-                # os.environ["MQTT_UUID"] = "'"+uuid+"'"
-                # os.environ["T_IBM_TOKEN"] = "'"+auth_token+"'"
-                # print os.environ["MQTT_UUID"]
-                # print os.environ["T_IBM_TOKEN"]
+                create_script(uuid, response.text)
+                os.system("pip install -r requirements.txt")
+                return
             else:
                 raise ValueError
         except ValueError:
             print("Invalid answer")
+
+main()
