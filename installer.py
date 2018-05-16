@@ -4,6 +4,7 @@ import getpass
 
 
 config_file = "/etc/systemd/system/instrument.service"
+url = "https://carbonmeasurmentsystem.eu-gb.mybluemix.net/"
 # config_file = "./instrument.service"
 
 def create_script(uuid, auth_token):
@@ -24,7 +25,7 @@ def main():
     print("It appears this is the first time the application is run.")
     print("Would you like to do a Automatic Setup?")
     print("1) Yes")
-    print("2) No (Manual UUID set)")
+    print("2) No (Manual UUID & TOKEN set)")
     while(True):
         answer = input("Enter answer: ")
         try:
@@ -39,7 +40,7 @@ def main():
                 username = raw_input("Enter username for CarbonMeasurmentApplication: ")
                 password = getpass.getpass('Enter password:')
                 data = {'deviceId': uuid, 'location': location, 'lat': lat, 'long': long}
-                api = 'https://carbonmeasurmentsystem.eu-gb.mybluemix.net/instruments/add'
+                api = url + 'instruments/add'
                 response = requests.post(api, data=data, auth=(username,password))
                 if(response.status_code == 200):
                     create_script(uuid, response.text)
@@ -47,6 +48,7 @@ def main():
                     os.system("sudo systemctl enable instrument.service")
                     os.system("sudo systemctl start instrument.service")
                     print("Instrument setup was successfull!")
+                    print("If requirements installation failed, use 'sudo pip install -r requirements.txt'")
                 else:
                     print("Error occurred")
                     print(response.text)
