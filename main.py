@@ -20,9 +20,6 @@ def main():
             logging.getLogger(instrument.name).setLevel(logging.DEBUG)
             logging.getLogger(instrument.scheduler.name).setLevel(logging.DEBUG)
 
-        if args.dev:
-            ser = SerialEmulator()
-            instrument._serial = ser
 
         instrument.start()
 
@@ -46,6 +43,9 @@ def get_instrument_config_file(development):
         # Test serial emulator
         serial_emulator = development
     )
+    if(development):
+        ser = SerialEmulator()
+        instrument._serial = ser
     set_options_config_file(config, instrument)
     return instrument
 

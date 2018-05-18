@@ -25,6 +25,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 MQTT_TYPE_READING = 'iot-2/evt/reading'
 MQTT_TYPE_ANALYSIS = 'iot-2/evt/analysis'
+MQTT_TYPE_JOBS = 'iot-2/evt/jobs'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
 MQTT_TYPE_STATUS = 'status'
 
@@ -387,6 +388,15 @@ class Instrument(object):
         # Try (*maybe)
         # Get module
         return self._imodules[name]
+
+    def get_jobs(self):
+        jobs = {}
+        for job in instrument.scheduler.get_jobs():
+            idea, args = job.args
+            jobs[id] = args
+        json_jobs = json.dumps(jobs)
+
+        msg_info = self._mqtt_client.publish(MQTT_TYPE_JOBS, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
     def calculate_analisis(self):
         try:
