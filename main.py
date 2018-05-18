@@ -5,20 +5,17 @@ import serial, os.path, configparser, argparse, logging, time
 import json
 
 config_file = 'config.ini'
-MINUTE = 60
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", help="Sets intrument to DEBUG mode",action="store_true")
     parser.add_argument("--dev", help="Sets Serial Emulator",action="store_true")
     args = parser.parse_args()
+
     # If there is config file, create instrument with config file settings
     if os.path.exists(config_file):
         global instrument
         instrument = get_instrument_config_file(args.dev)
-        # instrument.add_mode('analisis', ['module:licor:on', 'module:extp:off', 'module:valve:on', 'module:pump:on'])
-        # instrument.add_mode('sampling', ['module:pump:off', 'module:valve:off', 'module:extp:on', 'module:licor:off'])
-        # mqtt_add_mode = "licor:on,extp:off,valve:on,pump:on"
 
         if args.debug:
             logging.getLogger(instrument.name).setLevel(logging.DEBUG)
@@ -49,9 +46,7 @@ def get_instrument_config_file(development):
         serial_timeout = eval(config['SERIAL_SETTINGS']['SERIAL_TIMEOUT']),
         # Test serial emulator
         serial_emulator = development
-
     )
-
     set_options_config_file(config, instrument)
     return instrument
 
@@ -72,4 +67,6 @@ def set_options_config_file(config, instrument):
         trigger_type, unit, value = eval(config.get(job,'trigger')).split(':')
         targs = {unit:value if trigger_type == 'cron' else int(value)}
         instrument.add_job(trigger = trigger_type, name = job[4:], actions = eval(config[job]['actions']), **targs)
-main()
+
+if __name__ == "__main__":
+    main()
