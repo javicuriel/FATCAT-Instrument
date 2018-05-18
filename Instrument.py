@@ -104,7 +104,6 @@ class Instrument(object):
 
         self._mqtt_client = self._setup_mqtt_client()
 
-        # self._serial = self._set_up_serial()
         self._serial = None
         self._imodules = {}
 
@@ -116,6 +115,9 @@ class Instrument(object):
         self.scheduler = self._set_up_scheduler()
 
         self._mqtt_client.enable_logger(logger=self._logger)
+
+        if not kwargs.get('serial_emulator'):
+            self._serial = self._set_up_serial()
 
         self._modes = {}
         SingletonInstrument = self
@@ -215,7 +217,6 @@ class Instrument(object):
 
         # Callback is global because client will only subscribe to current modules in function on_connect
         all_module_topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t = '#')
-        print(all_module_topic.value)
         client.message_callback_add(all_module_topic.value, self._on_module_message)
 
         # Set max messages stored in memory
@@ -507,12 +508,12 @@ class Instrument(object):
         """
         Starts async MQTT client, sends lost messages when connected, starts scheduler and starts reading data
         """
-        self.log_message(module = 'instrument', msg = self.uuid)
+        self.log_message(module = self.name, msg = self.uuid)
         self._mqtt_client.loop_start()
         self._mqtt_resend_from_db()
         self.scheduler.start()
         if not test:
-            self.log_message(module = MQTT_TYPE_READING, msg = "Starting reader on topic = "+ self.mqtt_publish_topic.value)
+            self.log_message(module = self.name, msg = "Starting reader on topic = "+ self.mqtt_publish_topic.value)
             self.start_reader()
 
     def _get_timestamp(self):

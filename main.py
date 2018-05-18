@@ -10,11 +10,12 @@ MINUTE = 60
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--debug", help="Sets intrument to DEBUG mode",action="store_true")
+    parser.add_argument("--dev", help="Sets Serial Emulator",action="store_true")
     args = parser.parse_args()
     # If there is config file, create instrument with config file settings
     if os.path.exists(config_file):
         global instrument
-        instrument = get_instrument_config_file()
+        instrument = get_instrument_config_file(args.dev)
         # instrument.add_mode('analisis', ['module:licor:on', 'module:extp:off', 'module:valve:on', 'module:pump:on'])
         # instrument.add_mode('sampling', ['module:pump:off', 'module:valve:off', 'module:extp:on', 'module:licor:off'])
         # mqtt_add_mode = "licor:on,extp:off,valve:on,pump:on"
@@ -23,14 +24,17 @@ def main():
             logging.getLogger(instrument.name).setLevel(logging.DEBUG)
             logging.getLogger(instrument.scheduler.name).setLevel(logging.DEBUG)
 
+        if args.dev:
+            ser = SerialEmulator()
+            instrument._serial = ser
+
         instrument.start()
 
 
 # Sets up instrument with config file settings
-def get_instrument_config_file():
+def get_instrument_config_file(development):
     config = configparser.ConfigParser()
     config.read(config_file)
-    ser = SerialEmulator()
     instrument = Instrument(
         mqtt_host = eval(config['MQTT_SETTINGS']['MQTT_SERVER']),
         mqtt_port = eval(config['MQTT_SETTINGS']['MQTT_PORT']),
@@ -43,8 +47,11 @@ def get_instrument_config_file():
         serial_stopbits = eval(config['SERIAL_SETTINGS']['SERIAL_STOPBITS']),
         serial_bytesize = eval(config['SERIAL_SETTINGS']['SERIAL_BYTESIZE']),
         serial_timeout = eval(config['SERIAL_SETTINGS']['SERIAL_TIMEOUT']),
+        # Test serial emulator
+        serial_emulator = development
+
     )
-    instrument._serial = ser
+
     set_options_config_file(config, instrument)
     return instrument
 
