@@ -2,7 +2,6 @@ from Instrument import Instrument
 from SerialEmulator import SerialEmulator
 from models import IModule
 import serial, os.path, configparser, argparse, logging, time
-import json
 
 config_file = 'config.ini'
 
