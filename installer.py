@@ -77,7 +77,9 @@ def main():
                 # Ask for serial number
                 nano_td_serial.write("N?")
                 # Get serial number
-                serial_number_response = nano_td_serial.readline().rstrip()
+                serial_number_response = None
+                while not serial_number_response:
+                    serial_number_response = nano_td_serial.readline().rstrip()
                 nano_td_serial.write("X1000")
                 # Regex for SN
                 uuid = re.match('Serial Number=(.*)', serial_number_response).group(1)
