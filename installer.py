@@ -87,6 +87,7 @@ def main():
                     os.system("sudo pip install -r requirements.txt")
                     os.system("sudo systemctl enable instrument.service")
                     os.system("sudo systemctl start instrument.service")
+                    nano_td_serial.write("X1000")
                     print("Instrument setup was successfull!")
                     print("If requirements installation failed, use 'sudo pip install -r requirements.txt'")
                 else:
