@@ -368,7 +368,10 @@ class Instrument(object):
         dict_data['timestamp'] = timestamp
 
         for i,key in enumerate(keys):
-            dict_data[key] = float(data[i])
+            if i == len(keys)-1:
+                dict_data[key] = str(data[i])
+            else:
+                dict_data[key] = float(data[i])
 
 
         return dict_data
@@ -548,7 +551,7 @@ class Instrument(object):
                 self.stop()
                 break
             except Exception as e:
-                self.log_message(module = MQTT_TYPE_READING, msg = str(e), level = logging.WARN)
+                self.log_message(module = "reading", msg = str(e), level = logging.WARN)
                 self.memory_usage()
                 time.sleep(5)
 
