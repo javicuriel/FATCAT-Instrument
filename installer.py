@@ -19,7 +19,7 @@ def lookup_port():
     # Looks for and returns port with description
     ports = serial.tools.list_ports.comports()
     for port in ports:
-        return port if 'nano-TD' in port else None
+        return port if 'NANOTDMRA' in port else None
 
 
 def set_up_serial():
@@ -68,10 +68,13 @@ def main():
                 nano_td_serial = set_up_serial()
                 # Stop data flow
                 nano_td_serial.write("X0000")
+                while(len(nano_td_serial.readline())):
+                    pass
                 # Ask for serial number
                 nano_td_serial.write("N?")
                 # Get serial number
-                serial_number_response = nano_td_serial.readline().rstrip('\n')
+                serial_number_response = nano_td_serial.readline().rstrip()
+                nano_td_serial.write("X1000")
                 # Regex for SN
                 uuid = re.match('Serial Number=(.*)', serial_number_response).group(1)
                 location = raw_input("Enter location: ")
@@ -87,7 +90,7 @@ def main():
                     os.system("sudo pip install -r requirements.txt")
                     os.system("sudo systemctl enable instrument.service")
                     os.system("sudo systemctl start instrument.service")
-                    nano_td_serial.write("X1000")
+
                     print("Instrument setup was successfull!")
                     print("If requirements installation failed, use 'sudo pip install -r requirements.txt'")
                 else:

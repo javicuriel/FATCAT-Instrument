@@ -38,7 +38,7 @@ class Message(BaseModel):
     flow = pw.FloatField(null = True)
     curr = pw.FloatField(null = True)
     countdown = pw.FloatField(null = True)
-    statusbyte = pw.FloatField(null = True)
+    statusbyte = pw.CharField(null = True)
 
     total_carbon = pw.FloatField(null = True)
     max_temp = pw.FloatField(null = True)

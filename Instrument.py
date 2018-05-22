@@ -358,7 +358,7 @@ class Instrument(object):
         if not self._serial:
             raise ValueError('Serial is not set!')
 
-        data = self._serial.readline().rstrip('\n').split('\t')
+        data = self._serial.readline().rstrip().split('\t')
 
         timestamp = datetime.datetime.utcnow()
 
