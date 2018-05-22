@@ -22,7 +22,7 @@ def lookup_port():
         return port if 'nano-TD' in port else None
 
 
-def set_up_serial(self):
+def set_up_serial():
     # Waits 2 seconds before trying again if no port found
     # and doubles time each try with maximum 32 second waiting time
     port = lookup_port()
@@ -38,11 +38,11 @@ def set_up_serial(self):
 
     return serial.Serial(
         port = port.device,
-        baudrate = self.serial_baudrate,
-        parity = self.serial_parity,
-        stopbits = self.serial_stopbits,
-        bytesize = self.serial_bytesize,
-        timeout = self.serial_timeout
+        baudrate = 115200,
+        parity = serial.PARITY_NONE,
+        stopbits = serial.STOPBITS_ONE,
+        bytesize = serial.EIGHTBITS,
+        timeout = 1
     )
 
 def main():
