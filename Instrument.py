@@ -41,7 +41,6 @@ def memory_info():
 def helper_run_job(event_name, actions):
     # Helper function tu run a job
     SingletonInstrument._run_actions(event_name, actions)
-    SingletonInstrument.calculate_analisis()
 
 def convert_to_seconds(unit, value):
     """
@@ -325,7 +324,7 @@ class Instrument(object):
         self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = data, level = logging.DEBUG ,send_mqtt = False)
 
         # Save the message in the local database
-        msg.save()
+        # msg.save()
         # return True or false
         return msg.sent
 
@@ -406,7 +405,7 @@ class Instrument(object):
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
-            t1 = Message.select().where(Message.sample == True and Message.countdown == 0).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t1 = Message.select().where(Message.sample == True and Message.countdown == 70).order_by(Message.timestamp.desc()).limit(1).get().timestamp
             t0 = t1 - datetime.timedelta(seconds = 5)
             t2 = t1 + datetime.timedelta(seconds = 630)
             baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where((Message.sample == True)&(Message.timestamp >= t0)&(Message.timestamp <= t1)).get().avg
@@ -437,6 +436,8 @@ class Instrument(object):
             elif action_type == 'wait':
                 self.log_message(module = event_name, msg = "Waiting "+ value + " " + name)
                 time.sleep(convert_to_seconds(name, int(value)))
+            elif action_type == 'analyse':
+                self.calculate_analisis()
             else:
                 raise ValueError("Invalid action type:" + action_type)
 
@@ -461,10 +462,10 @@ class Instrument(object):
         ej. add_job('interval', 'example_name', [module:example_module:action_1, module:example_module:action_2], minutes = 10 )
         """
         try:
-            tuple_actions = self._get_tuple_actions(actions)
+            array_actions = self._get_array_actions(actions)
             # Because scheduler stores arguments in database, self is not serializable
             # Therefore we use helper function with actions calling on the singleton
-            self.scheduler.add_job(helper_run_job, trigger = trigger, name=name , id=name, replace_existing=True, args = [name, tuple_actions], **trigger_args)
+            self.scheduler.add_job(helper_run_job, trigger = trigger, name=name , id=name, replace_existing=True, args = [name, array_actions], **trigger_args)
             status = "Job added: " + name
             level = logging.INFO
         except Exception as e:
@@ -474,12 +475,12 @@ class Instrument(object):
 
     def add_mode(self, name, actions):
         try:
-            tuple_actions = self._get_tuple_actions(actions)
-            for action_type, module, action in tuple_actions:
+            array_actions = self._get_array_actions(actions)
+            for action_type, module, action in array_actions:
                 if action_type != 'module':
                     raise ValueError("Modes can only run modules commands!")
                 self._imodules[module].validate_action(action)
-            self._modes[name] = tuple_actions
+            self._modes[name] = array_actions
             status = "Mode saved successfully: "+ name
             level = logging.INFO
         except Exception as e:
@@ -487,20 +488,23 @@ class Instrument(object):
             level = logging.ERROR
         self.log_message(module = "instrument", msg = status, level = level)
 
-    def _get_tuple_actions(self, actions):
+    def _get_array_actions(self, actions):
         # Gets actions list in format: ['module:licor:on', 'module:extp:off']
         # Verify format with regex and converts it to tuples and append it to list so it is saved in correct format
-        tuple_actions = []
-        regex = "^((module|wait):\w+:\w+)$|^(mode:\w+)$"
+        array_actions = []
+        regex = "^((module|wait):\w+:\w+)$|^(mode:\w+)$|^(analyse)$"
         e = ValueError("Invalid action format: " + str(actions))
         for a in actions:
             if not re.match(regex, a):
                 raise e
             action = a.split(':')
-            tuple_actions.append((action[0], action[1], action[2] if len(action) == 3 else None))
-        if not tuple_actions:
+            for i in range(3):
+                if(len(action) <= i):
+                    action.append(None)
+            array_actions.append(action)
+        if not array_actions:
             raise e
-        return tuple_actions
+        return array_actions
 
 
     def run_action(self, module, action):

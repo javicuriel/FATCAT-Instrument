@@ -65,6 +65,7 @@ def set_options_config_file(config, instrument):
     for job in jobs:
         trigger_type, unit, value = eval(config.get(job,'trigger')).split(':')
         targs = {unit:value if trigger_type == 'cron' else int(value)}
+        # Name is job[4:] because removing 'JOB.'
         instrument.add_job(trigger = trigger_type, name = job[4:], actions = eval(config[job]['actions']), **targs)
 
 if __name__ == "__main__":
