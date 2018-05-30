@@ -76,7 +76,7 @@ class Instrument(object):
     def __init__(self, date_format = '%Y-%m-%d %H:%M:%S', *args, **kwargs ):
         super(Instrument, self).__init__()
         global SingletonInstrument
-        if SingletonInstrument:
+        if SingletonInstrument and not kwargs.get('serial_emulator'):
             raise ValueError("SingletonInstrument already set")
 
         self.name = 'instrument'
