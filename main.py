@@ -1,7 +1,9 @@
 from Instrument import Instrument
 from SerialEmulator import SerialEmulator
 from models import IModule
+from apscheduler.triggers.cron import CronTrigger
 import serial, os.path, configparser, argparse, logging, time
+import helpers
 
 config_file = 'config.ini'
 
@@ -20,7 +22,8 @@ def main():
             logging.getLogger(instrument.name).setLevel(logging.DEBUG)
             logging.getLogger(instrument.scheduler.name).setLevel(logging.DEBUG)
 
-
+        # instrument.run_action('pump', 'flow=10')
+        # instrument.get_jobs()
         instrument.start()
 
 
@@ -59,14 +62,17 @@ def set_options_config_file(config, instrument):
         instrument.add_module(module)
 
     for mode in config['MODES']:
-        instrument.add_mode(mode, eval(config['MODES'][mode]))
+        array_actions = helpers.get_array_actions(eval(config['MODES'][mode]))
+        instrument.add_mode(mode, array_actions)
 
     jobs = [section for section in config.sections() if section.startswith('JOB.')]
     for job in jobs:
-        trigger_type, unit, value = eval(config.get(job,'trigger')).split(':')
-        targs = {unit:value if trigger_type == 'cron' else int(value)}
+        targs = helpers.getTriggerArgs(eval(config.get(job,'trigger')))
+        array_actions = helpers.get_array_actions(eval(config[job]['actions']))
         # Name is job[4:] because removing 'JOB.'
-        instrument.add_job(trigger = trigger_type, name = job[4:], actions = eval(config[job]['actions']), **targs)
+        instrument.add_job(name = job[4:], actions = array_actions, **targs)
+
+
 
 if __name__ == "__main__":
     main()

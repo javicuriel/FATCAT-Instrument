@@ -13,11 +13,12 @@ import time, os, psutil, datetime
 import logging
 import sys
 import gc
-import re
 import ssl
 import json
+import helpers
 import peewee as pw
 import numpy as np
+
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -262,6 +263,14 @@ class Instrument(object):
         # payload: {action} or {action=99}
         module_name = message.topic.split('/')[2]
         action = str(message.payload)
+
+        if(module_name == 'job'):
+            job = json.loads(action)
+            targs = helpers.getTriggerArgs(job['trigger'])
+            self.add_job(name = job['id'], actions = job['actions'], **targs)
+            return
+
+
         self.log_message(module = module_name, msg = "MQTT Message: "+ action, level = logging.INFO)
         self.run_action(module_name, action)
 
@@ -276,6 +285,11 @@ class Instrument(object):
             topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t=imodule)
             self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
             self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic.value, level = logging.DEBUG)
+
+        # Adding topic for job management
+        topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t='job')
+        self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
+        self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic.value, level = logging.DEBUG)
 
 
     def _mqtt_on_disconnect(self, *args, **kwargs):
@@ -393,12 +407,14 @@ class Instrument(object):
 
     def get_jobs(self):
         jobs = {}
-        for job in instrument.scheduler.get_jobs():
-            idea, args = job.args
+        for job in self.scheduler.get_jobs():
+            id, args = job.args
             jobs[id] = args
         json_jobs = json.dumps(jobs)
+        print(jobs)
+        print(json_jobs)
 
-        msg_info = self._mqtt_client.publish(MQTT_TYPE_JOBS, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        # msg_info = self._mqtt_client.publish(MQTT_TYPE_JOBS, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
     def calculate_analisis(self):
         try:
@@ -439,7 +455,7 @@ class Instrument(object):
             elif action_type == 'analyse':
                 self.calculate_analisis()
             else:
-                raise ValueError("Invalid action type:" + action_type)
+                raise ValueError("Invalid action type: " + action_type)
 
     def run_mode(self, name):
         # Run mode actions
@@ -452,20 +468,23 @@ class Instrument(object):
         except Exception as e:
             self.log_message(module = module, msg = "Mode did not execute: " + name + str(e), level = logging.ERROR)
 
-    def add_job(self, trigger=None, name = None, actions = None, **trigger_args):
+    def add_job(self, name = None, actions = None, **trigger_args):
         """
         Adds a job to scheduler with helper function to call SingletonInstrument._run_actions(actions)
         trigger options: 'cron' | 'interval' | 'date'
         name is the id and name of job that is going to be stored by the scheduler
-        actions list and format  => ['action_type:name:value']
+        actions list and format  => [['action_type_1','name_1','value_1']... ['action_type_n','name_n','value_n']]
         trigger_args depend on type of trigger, see apscheduler documentation.
-        ej. add_job('interval', 'example_name', [module:example_module:action_1, module:example_module:action_2], minutes = 10 )
+        ej. add_job('interval', 'example_name', [['module','example_module','action_1'], ['module','example_module','action_2']], minutes = 10 )
         """
         try:
-            array_actions = self._get_array_actions(actions)
+            self.validate_actions(actions)
             # Because scheduler stores arguments in database, self is not serializable
             # Therefore we use helper function with actions calling on the singleton
-            self.scheduler.add_job(helper_run_job, trigger = trigger, name=name , id=name, replace_existing=True, args = [name, array_actions], **trigger_args)
+            if trigger_args['trigger'] == 'cron':
+                self.scheduler.add_job(helper_run_job, trigger_args['cron'], name=name , id=name, replace_existing=True, args = [name, actions])
+            else:
+                self.scheduler.add_job(helper_run_job, name=name , id=name, replace_existing=True, args = [name, actions], **trigger_args)
             status = "Job added: " + name
             level = logging.INFO
         except Exception as e:
@@ -473,38 +492,34 @@ class Instrument(object):
             level = logging.ERROR
         self.log_message(module = "instrument", msg = status, level = level)
 
+
+    def validate_actions(self, actions):
+        # Will test and raise error if not valid
+        try:
+            for action_type, module, action in actions:
+                if action_type == 'mode':
+                    self._modes[module]
+                elif action_type == 'wait':
+                    int(action)
+                elif action_type == 'module':
+                    self._imodules[module].validate_action(action)
+                else:
+                    if action_type != 'analyse':
+                        raise
+        except Exception as e:
+            raise ValueError("Invalid actions!")
+
+
     def add_mode(self, name, actions):
         try:
-            array_actions = self._get_array_actions(actions)
-            for action_type, module, action in array_actions:
-                if action_type != 'module':
-                    raise ValueError("Modes can only run modules commands!")
-                self._imodules[module].validate_action(action)
-            self._modes[name] = array_actions
+            self.validate_actions(actions)
+            self._modes[name] = actions
             status = "Mode saved successfully: "+ name
             level = logging.INFO
         except Exception as e:
             status = str(e) + " :: Mode not added: " + name
             level = logging.ERROR
         self.log_message(module = "instrument", msg = status, level = level)
-
-    def _get_array_actions(self, actions):
-        # Gets actions list in format: ['module:licor:on', 'module:extp:off']
-        # Verify format with regex and converts it to tuples and append it to list so it is saved in correct format
-        array_actions = []
-        regex = "^((module|wait):\w+:\w+)$|^(mode:\w+)$|^(analyse)$"
-        e = ValueError("Invalid action format: " + str(actions))
-        for a in actions:
-            if not re.match(regex, a):
-                raise e
-            action = a.split(':')
-            for i in range(3):
-                if(len(action) <= i):
-                    action.append(None)
-            array_actions.append(action)
-        if not array_actions:
-            raise e
-        return array_actions
 
 
     def run_action(self, module, action):
