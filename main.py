@@ -1,7 +1,6 @@
 from Instrument import Instrument
 from SerialEmulator import SerialEmulator
 from models import IModule
-from apscheduler.triggers.cron import CronTrigger
 import serial, os.path, configparser, argparse, logging, time
 import helpers
 

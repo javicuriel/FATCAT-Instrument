@@ -193,6 +193,7 @@ class Instrument(object):
             client_id = 'd:kbld7d:{}:{}'.format(self.name, self.uuid),
             protocol= mqtt.MQTTv311,
             clean_session = self._mqtt_clean_session
+            # clean_session = True
         )
 
         # Connection settings
@@ -255,6 +256,22 @@ class Instrument(object):
         for port in ports:
             return port if self.serial_port_description in port else None
 
+    def job_controller(self, json_command):
+        command = json.loads(json_command)
+        try:
+            if command['action']== 'all':
+                self.get_jobs()
+            else:
+                job = command['job']
+                # Add acts as edit as well
+                if command['action'] == 'add':
+                    targs = helpers.getTriggerArgs(job['trigger'])
+                    self.add_job(name = job['id'], actions = job['actions'], **targs)
+                elif command['action'] == 'delete':
+                    pass
+        except Exception as e:
+            # TODO Error log
+            pass
 
     def _on_module_message(self, client, userdata, message):
         # Topic format
@@ -265,14 +282,10 @@ class Instrument(object):
         action = str(message.payload)
 
         if(module_name == 'job'):
-            job = json.loads(action)
-            targs = helpers.getTriggerArgs(job['trigger'])
-            self.add_job(name = job['id'], actions = job['actions'], **targs)
-            return
-
-
-        self.log_message(module = module_name, msg = "MQTT Message: "+ action, level = logging.INFO)
-        self.run_action(module_name, action)
+            self.job_controller(action)
+        else:
+            self.log_message(module = module_name, msg = "MQTT Message: "+ action, level = logging.INFO)
+            self.run_action(module_name, action)
 
     def _mqtt_on_connect(self, *args, **kwargs):
         # Set _mqtt_connected flag to true and log
@@ -288,7 +301,7 @@ class Instrument(object):
 
         # Adding topic for job management
         topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t='job')
-        self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
+        self._mqtt_client.subscribe(topic.value, 0)
         self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic.value, level = logging.DEBUG)
 
 
@@ -406,15 +419,13 @@ class Instrument(object):
         return self._imodules[name]
 
     def get_jobs(self):
-        jobs = {}
+        jobs = {'jobs':[]}
         for job in self.scheduler.get_jobs():
             id, args = job.args
-            jobs[id] = args
+            jobs['jobs'].append({'id':id, 'trigger': str(job.trigger), 'actions':args})
         json_jobs = json.dumps(jobs)
-        print(jobs)
-        print(json_jobs)
-
-        # msg_info = self._mqtt_client.publish(MQTT_TYPE_JOBS, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        topic = self._create_topic(topic_type = MQTT_TYPE_JOBS)
+        msg_info = self._mqtt_client.publish(topic.value, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
     def calculate_analisis(self):
         try:
@@ -482,9 +493,9 @@ class Instrument(object):
             # Because scheduler stores arguments in database, self is not serializable
             # Therefore we use helper function with actions calling on the singleton
             if trigger_args['trigger'] == 'cron':
-                self.scheduler.add_job(helper_run_job, trigger_args['cron'], name=name , id=name, replace_existing=True, args = [name, actions])
+                self.scheduler.add_job(helper_run_job, trigger_args['cron'], name=name , id=name, replace_existing=True, args = [name, actions], timezone = 'UTC')
             else:
-                self.scheduler.add_job(helper_run_job, name=name , id=name, replace_existing=True, args = [name, actions], **trigger_args)
+                self.scheduler.add_job(helper_run_job, name=name , id=name, replace_existing=True, args = [name, actions], timezone = 'UTC', **trigger_args)
             status = "Job added: " + name
             level = logging.INFO
         except Exception as e:

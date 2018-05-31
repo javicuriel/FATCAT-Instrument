@@ -1,4 +1,5 @@
 import re
+from apscheduler.triggers.cron import CronTrigger
 
 def getTriggerArgs(trigger_args):
     # Trigger examples:
