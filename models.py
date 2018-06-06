@@ -22,8 +22,8 @@ class Message(BaseModel):
     timestamp = pw.DateTimeField(default=datetime.datetime.now)
 
     sample = pw.BooleanField(default = True)
-
     runtime = pw.FloatField(null = True)
+
     spoven = pw.FloatField(null = True)
     toven = pw.FloatField(null = True)
     spcoil = pw.FloatField(null = True)
@@ -76,18 +76,18 @@ class IModule(object):
             raise ValueError("Invalid action: "+ action)
 
 
-    def _get_action(self, message):
+    def _format_action(self, action):
         # Action format: 'example' or 'example=67'
-        commands = message.split('=')
+        commands = action.split('=')
         if len(commands) == 2:
             return commands[0], commands[1]
         elif len(commands) == 1:
             return commands[0], None
         else:
-            raise ValueError("Command format is invalid:" + message)
+            raise ValueError("Command format is invalid:" + action)
 
-    def set_value(self, actions, value):
-        a, b = actions
+    def set_value(self, range, value):
+        a, b = range
         serial_action = range_a = range_b = ''
         for i, char in enumerate(a):
             if a[i] != b[i]:
@@ -119,11 +119,11 @@ class IModule(object):
         else:
             raise e
 
-    def run_action(self, message):
+    def run_action(self, action_name):
         if not self.serial:
             raise ValueError('Serial is not set!')
 
-        action, value = self._get_action(message)
+        action, value = self._format_action(action_name)
 
         if action in self.actions:
             try:

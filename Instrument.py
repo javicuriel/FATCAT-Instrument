@@ -256,7 +256,7 @@ class Instrument(object):
         for port in ports:
             return port if self.serial_port_description in port else None
 
-    def job_controller(self, json_command):
+    def _job_controller(self, json_command):
         command = json.loads(json_command)
         try:
             if command['action']== 'all':
@@ -282,7 +282,7 @@ class Instrument(object):
         action = str(message.payload)
 
         if(module_name == 'job'):
-            self.job_controller(action)
+            self._job_controller(action)
         else:
             self.log_message(module = module_name, msg = "MQTT Message: "+ action, level = logging.INFO)
             self.run_action(module_name, action)
@@ -426,6 +426,7 @@ class Instrument(object):
         json_jobs = json.dumps(jobs)
         topic = self._create_topic(topic_type = MQTT_TYPE_JOBS)
         msg_info = self._mqtt_client.publish(topic.value, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        return json_jobs
 
     def calculate_analisis(self):
         try:
@@ -448,6 +449,7 @@ class Instrument(object):
             message = Message(topic = self.mqtt_analysis_topic,timestamp = timestamp, total_carbon = total_carbon, max_temp = max_temp, sample = False)
 
             self._mqtt_publish(message)
+            return message
 
         except Exception as e:
             print("ERROR OCURRED"+str(e))
