@@ -7,9 +7,7 @@ import re
 import configparser
 import time
 
-
 config_file = "/etc/systemd/system/instrument.service"
-url = "https://carbonmeasurmentsystem.eu-gb.mybluemix.net/"
 
 def create_script(uuid, auth_token):
     setup = "[Unit]\nDescription=Carbon measurement system\nAfter=network.target\n\n[Service]\nExecStart=/usr/bin/python -u main.py\nWorkingDirectory=/GAW-Instrument/\nEnvironment=MQTT_UUID=%s\nEnvironment=IBM_TOKEN=%s\nStandardOutput=inherit\nStandardError=inherit\nRestart=always\nRestartSec=2\n\n[Install]\nWantedBy=sysinit.target"
@@ -23,9 +21,7 @@ def lookup_port(name):
         return port if name in port else None
 
 
-def set_up_serial():
-    config = configparser.ConfigParser()
-    config.read('config.ini')
+def set_up_serial(config):
     serial_port_description = eval(config['SERIAL_SETTINGS']['SERIAL_PORT_DESCRIPTION'])
     # Waits 2 seconds before trying again if no port found
     # and doubles time each try with maximum 32 second waiting time
@@ -58,6 +54,11 @@ def main():
         print("Script must be run with sudo!")
         return
 
+    # Getting values from the configuration file
+    config = configparser.ConfigParser()
+    config.read('config.ini')
+    url = eval(config['API']['URL'])
+
     print("Welcome to FATCAT-Py Installer")
     print("It appears this is the first time the application is run.")
     print("Would you like to do a Automatic Setup?")
@@ -69,7 +70,7 @@ def main():
             val = int(answer)
             if(val == 1):
                 # Get Serial
-                nano_td_serial = set_up_serial()
+                nano_td_serial = set_up_serial(config)
                 # Stop data flow
                 nano_td_serial.write("X0000")
                 while(len(nano_td_serial.readline())):
@@ -114,4 +115,5 @@ def main():
         except ValueError:
             print("Invalid answer")
 
-main()
+if __name__ == "__main__":
+    main()
