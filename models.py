@@ -42,6 +42,7 @@ class Message(BaseModel):
 
     total_carbon = pw.FloatField(null = True)
     max_temp = pw.FloatField(null = True)
+    baseline = pw.FloatField(null = True)
 
     def to_json(self):
         omit = {'id','sent','topic','sample'}

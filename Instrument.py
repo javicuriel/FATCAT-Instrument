@@ -352,7 +352,7 @@ class Instrument(object):
         self.log_message(module = MQTT_TYPE_READING + ' - ' +mqtt_err, msg = data, level = logging.DEBUG ,send_mqtt = False)
 
         # Save the message in the local database
-        # msg.save()
+        msg.save()
         # return True or false
         return msg.sent
 
@@ -434,7 +434,7 @@ class Instrument(object):
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
-            t1 = Message.select().where(Message.sample == True and Message.countdown == 70).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t1 = Message.select().where(Message.sample == True and Message.countdown == 0).order_by(Message.timestamp.desc()).limit(1).get().timestamp
             t0 = t1 - datetime.timedelta(seconds = 5)
             t2 = t1 + datetime.timedelta(seconds = 630)
             baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where((Message.sample == True)&(Message.timestamp >= t0)&(Message.timestamp <= t1)).get().avg
@@ -447,13 +447,14 @@ class Instrument(object):
             deltatc = np.array(co2)*flowrate
             total_carbon = np.trapz(deltatc, x=np.array(runtime))
             timestamp = datetime.datetime.utcnow()
-            message = Message(topic = self.mqtt_analysis_topic,timestamp = timestamp, total_carbon = total_carbon, max_temp = max_temp, sample = False)
-
+            message = Message(topic = self.mqtt_analysis_topic,timestamp = timestamp, total_carbon = total_carbon, max_temp = max_temp, baseline = baseline ,sample = False)
             self._mqtt_publish(message)
+            self.log_message(module = 'analisis', msg = "Analysis successful: Carbon=" + str(total_carbon) + ' Temp=' + str(max_temp) + ' Baseline=' + str(baseline), level = logging.INFO)
             return message
 
         except Exception as e:
-            print("ERROR OCURRED"+str(e))
+            self.log_message(module = 'analisis', msg = "Analysis not successful: " + str(e), level = logging.ERROR)
+
 
     def _run_actions(self, event_name, actions):
         # Runs a list of actions given in tuple form: (action_type, name, value)
