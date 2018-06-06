@@ -81,6 +81,8 @@ class Instrument(object):
 
         self.name = 'instrument'
         self.uuid = os.environ["MQTT_UUID"]
+
+        self.mqtt_org = kwargs.get('mqtt_org')
         self.mqtt_host = kwargs.get('mqtt_host')
         self.mqtt_port = kwargs.get('mqtt_port')
         self.mqtt_keep_alive = kwargs.get('mqtt_keep_alive')
@@ -190,15 +192,14 @@ class Instrument(object):
     def _setup_mqtt_client(self):
         # Creates MQTT client
         client = mqtt.Client(
-            client_id = 'd:kbld7d:{}:{}'.format(self.name, self.uuid),
+            client_id = 'd:{}:{}:{}'.format(self.mqtt_org, self.name, self.uuid),
             protocol= mqtt.MQTTv311,
             clean_session = self._mqtt_clean_session
-            # clean_session = True
         )
 
         # Connection settings
         client.connect_async(
-            host = self.mqtt_host,
+            host = self.mqtt_org + '.' +self.mqtt_host,
             port = self.mqtt_port,
             keepalive = self.mqtt_keep_alive
         )
@@ -290,7 +291,7 @@ class Instrument(object):
     def _mqtt_on_connect(self, *args, **kwargs):
         # Set _mqtt_connected flag to true and log
         self._mqtt_connected = True
-        self.log_message(module = 'mqttclient', msg = 'connected to '+ self.mqtt_host)
+        self.log_message(module = 'mqttclient', msg = 'connected to '+ self.mqtt_org + '.' +self.mqtt_host)
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.

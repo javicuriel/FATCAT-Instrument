@@ -31,6 +31,7 @@ def get_instrument_config_file(development):
     config = configparser.ConfigParser()
     config.read(config_file)
     instrument = Instrument(
+        mqtt_org = eval(config['MQTT_SETTINGS']['MQTT_ORG']),
         mqtt_host = eval(config['MQTT_SETTINGS']['MQTT_SERVER']),
         mqtt_port = eval(config['MQTT_SETTINGS']['MQTT_PORT']),
         mqtt_keep_alive = eval(config['MQTT_SETTINGS']['MQTT_KEEPALIVE']),
