@@ -15,16 +15,13 @@ client.username_pw_set(
 )
 
 # Connection settings
-client.connect_async(
-    host = 'brd98r.messaging.internetofthings.ibmcloud.com',
-    port = 8883,
-    keepalive = 5
-)
+# client.connect_async(
+
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
 
-def on_disconnect(client, userdata, flags, rc):
+def on_disconnect(client, userdata, rc):
     print("Disconnected with result code "+str(rc))
 
 
@@ -32,13 +29,21 @@ client.on_connect = on_connect;
 client.on_disconnect = on_disconnect;
 client.tls_set(cert_reqs = ssl.CERT_REQUIRED, tls_version = ssl.PROTOCOL_TLSv1_2)
 
+client.connect(
+    host = 'brd98r.messaging.internetofthings.ibmcloud.com',
+    port = 8883,
+    keepalive = 5
+)
+
 # FORMAT = '%(asctime)-15s %(clientip)s %(user)-8s %(message)s'
 logging.basicConfig()
 logger = logging.getLogger('mqtt')
 logger.setLevel(logging.DEBUG);
 
 client.enable_logger(logger=logger)
-client.loop_start()
+# client.loop_start()
 
-while True:
-    pass
+client.loop_forever()
+
+# while True:
+#     pass
