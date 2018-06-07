@@ -3,7 +3,8 @@ import ssl
 
 client = mqtt.Client(
     client_id = 'd:{}:{}:{}'.format('brd98r', 'instrument', '11'),
-    protocol= mqtt.MQTTv311,
+    # protocol= mqtt.MQTTv311,
+    protocol= mqtt.MQTTv31,
     clean_session = False
 )
 
