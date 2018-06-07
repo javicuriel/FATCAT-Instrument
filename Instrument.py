@@ -197,6 +197,12 @@ class Instrument(object):
             clean_session = self._mqtt_clean_session
         )
 
+        client.username_pw_set(
+                username='use-token-auth',
+                # Should be environment variable
+                password= os.environ['IBM_TOKEN']
+        )
+
         # Connection settings
         client.connect_async(
             host = self.mqtt_org + '.' +self.mqtt_host,
@@ -204,11 +210,6 @@ class Instrument(object):
             keepalive = self.mqtt_keep_alive
         )
 
-        client.username_pw_set(
-                username='use-token-auth',
-                # Should be environment variable
-                password= os.environ['IBM_TOKEN']
-        )
 
         # Enable SSL/TLS support.
         if self.mqtt_port == 8883:
