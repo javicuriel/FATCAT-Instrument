@@ -80,8 +80,7 @@ class Instrument(object):
             raise ValueError("SingletonInstrument already set")
 
         self.name = 'instrument'
-        # self.uuid = os.environ["MQTT_UUID"]
-        self.uuid = '11'
+        self.uuid = os.environ["MQTT_UUID"]
 
         self.mqtt_org = kwargs.get('mqtt_org')
         self.mqtt_host = kwargs.get('mqtt_host')
@@ -201,8 +200,7 @@ class Instrument(object):
         client.username_pw_set(
                 username='use-token-auth',
                 # Should be environment variable
-                # password= os.environ['IBM_TOKEN']
-                password= '@pQz-B4nq2mdbGQ5--'
+                password= os.environ['IBM_TOKEN']
         )
 
         # Connection settings
