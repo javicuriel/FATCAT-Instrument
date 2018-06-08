@@ -24,7 +24,7 @@ def get_array_actions(actions):
     # Gets actions list in format: ['module:licor:on', 'module:extp:off']
     # Verify format with regex and converts it to tuples and append it to list so it is saved in correct format
     array_actions = []
-    regex = "^((module|wait):\w+:\w+)$|^(mode:\w+)$|^(analyse)$"
+    regex = "^((module|wait):\w+:(\w|=)+)$|^(mode:\w+)$|^(analyse)$"
     e = ValueError("Invalid action format: " + str(actions))
     for a in actions:
         if not re.match(regex, a):

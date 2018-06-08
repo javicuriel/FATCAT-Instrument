@@ -501,7 +501,7 @@ class Instrument(object):
                 self.scheduler.add_job(helper_run_job, trigger_args['cron'], name=name , id=name, replace_existing=True, args = [name, actions], timezone = 'UTC')
             else:
                 self.scheduler.add_job(helper_run_job, name=name , id=name, replace_existing=True, args = [name, actions], timezone = 'UTC', **trigger_args)
-            status = "Job added: " + name
+            status = "Job added: " + name +'-- Trigger:' + str(trigger_args)
             level = logging.INFO
         except Exception as e:
             status = str(e) + " Job not added: " + name
@@ -513,12 +513,14 @@ class Instrument(object):
         # Will test and raise error if not valid
         try:
             for action_type, module, action in actions:
+
                 if action_type == 'mode':
                     self._modes[module]
                 elif action_type == 'wait':
                     int(action)
                 elif action_type == 'module':
-                    self._imodules[module].validate_action(action)
+                    values = action.split('=')
+                    self._imodules[module].validate_action(values[0])
                 else:
                     if action_type != 'analyse':
                         raise
