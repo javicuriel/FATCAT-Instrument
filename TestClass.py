@@ -74,6 +74,7 @@ class InstrumentTest(unittest.TestCase):
             mqtt_port = MQTT_PORT,
             mqtt_keep_alive = MQTT_KEEPALIVE,
             mqtt_qos = MQTT_QOS,
+            mqtt_org = 'kbld7d',
             serial_emulator = True
         )
 

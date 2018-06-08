@@ -430,12 +430,12 @@ class Instrument(object):
         msg_info = self._mqtt_client.publish(topic.value, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
         return json_jobs
 
-    def calculate_analisis(self):
+    def calculate_analisis(self, countdown):
         try:
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
-            t1 = Message.select().where(Message.sample == True and Message.countdown == 0).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t1 = Message.select().where(Message.sample == True and Message.countdown == int(countdown)).order_by(Message.timestamp.desc()).limit(1).get().timestamp
             t0 = t1 - datetime.timedelta(seconds = 5)
             t2 = t1 + datetime.timedelta(seconds = 630)
             baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where((Message.sample == True)&(Message.timestamp >= t0)&(Message.timestamp <= t1)).get().avg
@@ -469,7 +469,7 @@ class Instrument(object):
                 self.log_message(module = event_name, msg = "Waiting "+ value + " " + name)
                 time.sleep(convert_to_seconds(name, int(value)))
             elif action_type == 'analyse':
-                self.calculate_analisis()
+                self.calculate_analisis(name)
             else:
                 raise ValueError("Invalid action type: " + action_type)
 
@@ -513,7 +513,6 @@ class Instrument(object):
         # Will test and raise error if not valid
         try:
             for action_type, module, action in actions:
-
                 if action_type == 'mode':
                     self._modes[module]
                 elif action_type == 'wait':
@@ -522,6 +521,7 @@ class Instrument(object):
                     values = action.split('=')
                     self._imodules[module].validate_action(values[0])
                 else:
+                    int(module)
                     if action_type != 'analyse':
                         raise
         except Exception as e:
