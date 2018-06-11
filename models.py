@@ -130,12 +130,11 @@ class IModule(object):
             try:
                 if value:
                     serial_action = self.actions[action](value = value)
-                    self.serial.write(serial_action)
-                    return serial_action
                 else:
                     serial_action = self.actions[action]
-                    self.serial.write(serial_action)
-                    return serial_action
+                    
+                self.serial.write(serial_action.encode())
+                return serial_action
             except:
                 raise
         raise ValueError("Command not found:" + action)
