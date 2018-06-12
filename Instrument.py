@@ -286,7 +286,7 @@ class Instrument(object):
         if(module_name == 'job'):
             self._job_controller(action)
         else:
-            self.log_message(module = 'mqttclient', msg = "MQTT Message: "+module_name ":"+ action, level = logging.INFO)
+            self.log_message(module = 'mqttclient', msg = "MQTT Message: "+module_name+ ":"+ action, level = logging.INFO)
             self.run_action(module_name, action)
 
     def _mqtt_on_connect(self, *args, **kwargs):
@@ -589,9 +589,9 @@ class Instrument(object):
                 break
             except serial.SerialException as se:
                 self.log_message(module = "serial", msg = str(se), level = logging.WARN)
-                # self._serial.close()
+                self._serial.close()
                 self._serial = self._set_up_serial()
-                # self._serial.open()
+                self._serial.open()
             except Exception as e:
                 self.log_message(module = "reading", msg = str(e), level = logging.WARN)
 
