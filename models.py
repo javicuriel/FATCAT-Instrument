@@ -47,7 +47,7 @@ class Message(BaseModel):
     def to_json(self):
         omit = {'id','sent','topic','sample'}
         data = {x: self.__data__[x] for x in self.__data__ if x not in omit and self.__data__[x] != None}
-        data['timestamp'] = data['timestamp'].isoformat()
+        data['timestamp'] = data['timestamp'].isoformat() + 'Z'
         json_data = json.dumps(data)
         return json_data
 
@@ -132,7 +132,7 @@ class IModule(object):
                     serial_action = self.actions[action](value = value)
                 else:
                     serial_action = self.actions[action]
-                    
+
                 self.serial.write(serial_action.encode())
                 return serial_action
             except:
