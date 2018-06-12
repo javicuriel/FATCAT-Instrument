@@ -287,7 +287,10 @@ class Instrument(object):
             self._job_controller(action)
         else:
             self.log_message(module = 'mqttclient', msg = "MQTT Message: "+module_name+ ":"+ action, level = logging.INFO)
-            self.run_action(module_name, action)
+            if(module_name in self._modes):
+                self.run_mode(module_name)
+            else:
+                self.run_action(module_name, action)
 
     def _mqtt_on_connect(self, *args, **kwargs):
         # Set _mqtt_connected flag to true and log
@@ -300,6 +303,11 @@ class Instrument(object):
             topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t=imodule)
             self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
             self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic.value, level = logging.DEBUG)
+
+        for imodule in self._modes:
+            topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t=imodule)
+            self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
+            self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic.value, level = logging.INFO)
 
         # Adding topic for job management
         topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t='job')
@@ -430,7 +438,7 @@ class Instrument(object):
         msg_info = self._mqtt_client.publish(topic.value, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
         return json_jobs
 
-    def calculate_analisis(self, countdown):
+    def calculate_analysis(self, countdown):
         try:
             ppmtoug = 12.01/22.4
             co2 = []
@@ -450,11 +458,11 @@ class Instrument(object):
             timestamp = datetime.datetime.utcnow()
             message = Message(topic = self.mqtt_analysis_topic,timestamp = timestamp, total_carbon = total_carbon, max_temp = max_temp, baseline = baseline ,sample = False)
             self._mqtt_publish(message)
-            self.log_message(module = 'analisis', msg = "Analysis successful: Carbon=" + str(total_carbon) + ' Temp=' + str(max_temp) + ' Baseline=' + str(baseline), level = logging.INFO)
+            self.log_message(module = 'analysis', msg = "Analysis successful: Carbon=" + str(total_carbon) + ' Temp=' + str(max_temp) + ' Baseline=' + str(baseline), level = logging.INFO)
             return message
 
         except Exception as e:
-            self.log_message(module = 'analisis', msg = "Analysis not successful: " + str(e), level = logging.ERROR)
+            self.log_message(module = 'analysis', msg = "Analysis not successful: " + str(e), level = logging.ERROR)
 
 
     def _run_actions(self, event_name, actions):
@@ -469,7 +477,7 @@ class Instrument(object):
                 self.log_message(module = event_name, msg = "Waiting "+ value + " " + name)
                 time.sleep(convert_to_seconds(name, int(value)))
             elif action_type == 'analyse':
-                self.calculate_analisis(name)
+                self.calculate_analysis(name)
             else:
                 raise ValueError("Invalid action type: " + action_type)
 
