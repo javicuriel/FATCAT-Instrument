@@ -590,6 +590,7 @@ class Instrument(object):
             except Exception as e:
                 self.log_message(module = "reading", msg = str(e), level = logging.WARN)
                 self.memory_usage()
+                self._serial.close()
                 self._serial = self._set_up_serial()
                 time.sleep(5)
 
