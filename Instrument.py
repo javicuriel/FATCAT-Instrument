@@ -286,7 +286,7 @@ class Instrument(object):
         if(module_name == 'job'):
             self._job_controller(action)
         else:
-            self.log_message(module = module_name, msg = "MQTT Message: "+ action, level = logging.INFO)
+            self.log_message(module = 'mqttclient', msg = "MQTT Message: "+module_name ":"+ action, level = logging.INFO)
             self.run_action(module_name, action)
 
     def _mqtt_on_connect(self, *args, **kwargs):
