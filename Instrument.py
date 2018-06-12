@@ -587,13 +587,15 @@ class Instrument(object):
             except KeyboardInterrupt:
                 self.stop()
                 break
-            except Exception as e:
-                self.log_message(module = "reading", msg = str(e), level = logging.WARN)
-                self.memory_usage()
+            except serial.SerialException as e:
                 self._serial.close()
                 self._serial = self._set_up_serial()
                 self._serial.open()
+                self.log_message(module = "reading", msg = str(e), level = logging.WARN)
                 time.sleep(5)
+            except Exception as e:
+                self.log_message(module = "reading", msg = str(e), level = logging.WARN)
+                # self.memory_usage()
 
     def stop(self):
         self._mqtt_client.loop_stop()
