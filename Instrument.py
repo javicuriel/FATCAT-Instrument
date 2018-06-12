@@ -591,7 +591,8 @@ class Instrument(object):
                 self.log_message(module = "serial", msg = str(se), level = logging.WARN)
                 self._serial.close()
                 self._serial = self._set_up_serial()
-                # self._serial.open()
+                for m in self._imodules:
+                    m.serial = self._serial
             except Exception as e:
                 self.log_message(module = "reading", msg = str(e), level = logging.WARN)
 
