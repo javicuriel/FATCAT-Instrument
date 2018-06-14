@@ -299,21 +299,15 @@ class Instrument(object):
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
-        for imodule in self._imodules:
-            topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t=imodule)
+        self._mqtt_subscribe(self._imodules)
+        self._mqtt_subscribe(self._modes)
+        self._mqtt_subscribe({'job'})
+
+    def _mqtt_subscribe(self, topics):
+        for t in topics:
+            topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t=t)
             self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
             self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic.value, level = logging.DEBUG)
-
-        for imodule in self._modes:
-            topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t=imodule)
-            self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
-            self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic.value, level = logging.INFO)
-
-        # Adding topic for job management
-        topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t='job')
-        self._mqtt_client.subscribe(topic.value, 0)
-        self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic.value, level = logging.DEBUG)
-
 
     def _mqtt_on_disconnect(self, *args, **kwargs):
         # Set _mqtt_connected flag to false and log it
