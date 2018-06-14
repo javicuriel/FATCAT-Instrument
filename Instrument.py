@@ -449,8 +449,7 @@ class Instrument(object):
                 runtime.append(m.runtime)
             deltatc = np.array(co2)*flowrate
             total_carbon = np.trapz(deltatc, x=np.array(runtime))
-            timestamp = datetime.datetime.utcnow()
-            message = Message(topic = self.mqtt_analysis_topic,timestamp = timestamp, total_carbon = total_carbon, max_temp = max_temp, baseline = baseline ,sample = False)
+            message = Message(topic = self.mqtt_analysis_topic,timestamp = t1, total_carbon = total_carbon, max_temp = max_temp, baseline = baseline ,sample = False)
             self._mqtt_publish(message)
             self.log_message(module = 'analysis', msg = "Analysis successful: Carbon=" + str(total_carbon) + ' Temp=' + str(max_temp) + ' Baseline=' + str(baseline), level = logging.INFO)
             return message
