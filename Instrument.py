@@ -467,7 +467,7 @@ class Instrument(object):
             elif action_type == 'module':
                 self.run_action(name, value)
             elif action_type == 'wait':
-                self.log_message(module = event_name, msg = "Waiting "+ value + " " + name)
+                self.log_message(module = self.name, msg = "Waiting "+ value + " " + name)
                 time.sleep(convert_to_seconds(name, int(value)))
             elif action_type == 'analyse':
                 self.calculate_analysis(name)
