@@ -3,7 +3,7 @@ from apscheduler.triggers.cron import CronTrigger
 
 def getTriggerArgs(trigger_args):
     # Trigger examples:
-    # ['cron', '* * * * * *']
+    # ['cron', '* * * * *']
     # ['interval', 'minutes', '6']
     try:
         targs = {}
@@ -16,7 +16,8 @@ def getTriggerArgs(trigger_args):
         elif(trigger_type == 'date'):
             targs['run_date'] = trigger_args[1]
         return targs
-    except:
+    except Exception as e:
+        print(str(e))
         return {}
 
 
