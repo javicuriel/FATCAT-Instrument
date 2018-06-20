@@ -67,10 +67,9 @@ def set_options_config_file(config, instrument):
 
     jobs = [section for section in config.sections() if section.startswith('JOB.')]
     for job in jobs:
-        targs = helpers.getTriggerArgs(eval(config.get(job,'trigger')))
         array_actions = helpers.get_array_actions(eval(config[job]['actions']))
         # Name is job[4:] because removing 'JOB.'
-        instrument.add_job(name = job[4:], actions = array_actions, **targs)
+        instrument.add_job(name = job[4:], actions = array_actions, trigger = eval(config.get(job,'trigger')))
 
 
 
