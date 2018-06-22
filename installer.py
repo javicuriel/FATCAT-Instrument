@@ -57,7 +57,7 @@ def main():
     # Getting values from the configuration file
     config = configparser.ConfigParser()
     config.read('config.ini')
-    url = eval(config['API']['URL'])
+    url = eval(config['GENERAL_SETTINGS']['API_URL'])
 
     print("Welcome to FATCAT-Py Installer")
     print("It appears this is the first time the application is run.")
