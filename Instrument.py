@@ -27,6 +27,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 MQTT_TYPE_READING = 'iot-2/evt/reading'
 MQTT_TYPE_ANALYSIS = 'iot-2/evt/analysis'
 MQTT_TYPE_JOBS = 'iot-2/evt/jobs'
+MQTT_TYPE_JOB = 'iot-2/evt/job'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
 MQTT_TYPE_STATUS = 'status'
 
@@ -259,21 +260,35 @@ class Instrument(object):
             return port if self.serial_port_description in port else None
 
     def _job_controller(self, json_command):
-        command = json.loads(json_command)
+        event = json.loads(json_command)
+        action = event['action']
         try:
-            if command['action']== 'all':
-                self.get_jobs()
-            else:
-                job = command['job']
-                # Add acts as edit as well
-                if command['action'] == 'add':
-                    targs = helpers.getTriggerArgs(job['trigger'])
-                    self.add_job(name = job['id'], actions = job['actions'], **targs)
-                elif command['action'] == 'delete':
-                    pass
+            if action == 'add':
+                self.add_job(name = event['job']['_id'], actions = event['job']['actions'], trigger = event['job']['trigger'])
+            elif action == 'disable':
+                self.delete_job(event['job']['_id'], True)
+            elif action == 'delete':
+                self.delete_job(event['job']['_id'])
         except Exception as e:
-            # TODO Error log
-            pass
+            print(str(e))
+
+    def delete_job(self, id, disable = False):
+        try:
+            action = 'delete'
+            if disable:
+                action = 'disable'
+            self.scheduler.remove_job(id)
+            status = "Job "+action+"d: " + id
+            level = logging.INFO
+            job_event = json.dumps({'action':action, '_id': id})
+            topic = self._create_topic(topic_type = MQTT_TYPE_JOB)
+            msg_info = self._mqtt_client.publish(topic.value, job_event, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        except Exception as e:
+            status = str(e) + " Job not "+action+"d: " + id
+            level = logging.ERROR
+        self.log_message(module = "instrument", msg = status, level = level)
+
+
 
     def _on_module_message(self, client, userdata, message):
         # Topic format
@@ -446,7 +461,8 @@ class Instrument(object):
             max_temp = messages.select(pw.fn.MAX(Message.toven).alias('max')).where((Message.sample == True)&(Message.timestamp >= t1)&(Message.timestamp <= t2)).get().max
             for m in messages:
                 co2.append((m.co2 - baseline)*ppmtoug)
-                runtime.append(m.runtime)
+                # Converting runtime to minutes
+                runtime.append(m.runtime/60)
             deltatc = np.array(co2)*flowrate
             total_carbon = np.trapz(deltatc, x=np.array(runtime))
             message = Message(topic = self.mqtt_analysis_topic,timestamp = t1, total_carbon = total_carbon, max_temp = max_temp, baseline = baseline ,sample = False)
@@ -485,7 +501,7 @@ class Instrument(object):
         except Exception as e:
             self.log_message(module = module, msg = "Mode did not execute: " + name + str(e), level = logging.ERROR)
 
-    def add_job(self, name = None, actions = None, **trigger_args):
+    def add_job(self, name = None, actions = None, trigger = None):
         """
         Adds a job to scheduler with helper function to call SingletonInstrument._run_actions(actions)
         trigger options: 'cron' | 'interval' | 'date'
@@ -495,18 +511,25 @@ class Instrument(object):
         ej. add_job('interval', 'example_name', [['module','example_module','action_1'], ['module','example_module','action_2']], minutes = 10 )
         """
         try:
+            trigger_args = helpers.getTriggerArgs(trigger)
             self.validate_actions(actions)
             # Because scheduler stores arguments in database, self is not serializable
             # Therefore we use helper function with actions calling on the singleton
             if trigger_args['trigger'] == 'cron':
-                self.scheduler.add_job(helper_run_job, trigger_args['cron'], name=name , id=name, replace_existing=True, args = [name, actions], timezone = 'UTC')
+                job = self.scheduler.add_job(helper_run_job, trigger_args['cron'], name=name , id=name, replace_existing=True, args = [name, actions])
             else:
-                self.scheduler.add_job(helper_run_job, name=name , id=name, replace_existing=True, args = [name, actions], timezone = 'UTC', **trigger_args)
+                job = self.scheduler.add_job(helper_run_job, name=name , id=name, replace_existing=True, args = [name, actions], **trigger_args)
             status = "Job added: " + name +'-- Trigger:' + str(trigger_args)
             level = logging.INFO
+            # Send valid job in json form
+            message = json.dumps({'action': 'add', '_id':job.args[0], 'job': {'trigger': trigger, 'actions':job.args[1]}})
+
         except Exception as e:
+            message = json.dumps({'action': 'error', '_id':name, 'error': str(e)})
             status = str(e) + " Job not added: " + name
             level = logging.ERROR
+        topic = self._create_topic(topic_type = MQTT_TYPE_JOB)
+        self._mqtt_client.publish(topic.value, message, qos = self.mqtt_qos, retain = self._mqtt_retain)
         self.log_message(module = "instrument", msg = status, level = level)
 
 
