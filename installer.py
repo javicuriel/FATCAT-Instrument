@@ -47,9 +47,7 @@ def set_up_serial(config):
     )
 
 
-def getInstrumentSerialNumber():
-    # Get Serial
-    nano_td_serial = set_up_serial(config)
+def getInstrumentSerialNumber(nano_td_serial):
     # Stop data flow
     nano_td_serial.write("X0000")
     # Empty buffer
@@ -95,40 +93,38 @@ def main():
     print("2) No (Manual UUID & TOKEN set)")
     while(True):
         answer = input("Enter answer: ")
-        try:
-            val = int(answer)
-            if(val == 1):
-                uuid = getInstrumentSerialNumber()
-                location = raw_input("Enter location: ")
-                lat = raw_input("Enter latitude: ")
-                long = raw_input("Enter longitude: ")
-                username = raw_input("Enter username for '"+url+"':")
-                password = getpass.getpass("Enter password for '"+url+"':")
-                data = {'deviceId': uuid, 'location': location, 'lat': lat, 'long': long}
-                api = url + 'instruments/add'
-                # Get API token for instrument security
-                response = requests.post(api, data=data, auth=(username,password))
-                if(response.status_code == 200):
-                    create_script(uuid, response.text)
-                    os.system("sudo pip install -r requirements.txt")
-                    os.system("sudo systemctl enable instrument.service")
-                    os.system("sudo systemctl start instrument.service")
-
-                    print("Instrument setup was successfull!")
-                    print("If requirements installation failed, use 'sudo pip install -r requirements.txt'")
-                else:
-                    print("Error occurred")
-                    print(response.text)
-                return
-            elif(val == 2):
-                uuid = raw_input("Enter UUID: ")
-                auth_token = raw_input("Enter Token: ")
+        val = int(answer)
+        if(val == 1):
+            # Get Serial
+            nano_td_serial = set_up_serial(config)
+            uuid = getInstrumentSerialNumber(nano_td_serial)
+            location = raw_input("Enter location: ")
+            lat = raw_input("Enter latitude: ")
+            long = raw_input("Enter longitude: ")
+            username = raw_input("Enter username for '"+url+"':")
+            password = getpass.getpass("Enter password for '"+url+"':")
+            data = {'deviceId': uuid, 'location': location, 'lat': lat, 'long': long}
+            api = url + 'instruments/add'
+            # Get API token for instrument security
+            response = requests.post(api, data=data, auth=(username,password))
+            if(response.status_code == 200):
                 create_script(uuid, response.text)
-                os.system("pip install -r requirements.txt")
-                return
+                os.system("sudo pip install -r requirements.txt")
+                os.system("sudo systemctl enable instrument.service")
+                os.system("sudo systemctl start instrument.service")
+                print("Instrument setup was successfull!")
+                print("If requirements installation failed, use 'sudo pip install -r requirements.txt'")
             else:
-                raise ValueError
-        except ValueError:
+                print("Error occurred")
+                print(response.text)
+            return
+        elif(val == 2):
+            uuid = raw_input("Enter UUID: ")
+            auth_token = raw_input("Enter Token: ")
+            create_script(uuid, response.text)
+            os.system("pip install -r requirements.txt")
+            return
+        else:
             print("Invalid answer")
 
 if __name__ == "__main__":
