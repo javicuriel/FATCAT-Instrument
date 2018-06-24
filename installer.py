@@ -9,6 +9,7 @@ import time
 
 config_file = "/etc/systemd/system/instrument.service"
 
+# Create and save init script so application is run as a serivce on application crash or system reboot.
 def create_script(uuid, auth_token):
     setup = "[Unit]\nDescription=Carbon measurement system\nAfter=network.target\n\n[Service]\nExecStart=/usr/bin/python -u main.py\nWorkingDirectory=/GAW-Instrument/\nEnvironment=MQTT_UUID=%s\nEnvironment=IBM_TOKEN=%s\nStandardOutput=inherit\nStandardError=inherit\nRestart=always\nRestartSec=2\nKillSignal=SIGINT\n\n[Install]\nWantedBy=sysinit.target"
     file = open(config_file, "w+")
@@ -105,6 +106,7 @@ def main():
                 password = getpass.getpass("Enter password for '"+url+"':")
                 data = {'deviceId': uuid, 'location': location, 'lat': lat, 'long': long}
                 api = url + 'instruments/add'
+                # Get API token for instrument security
                 response = requests.post(api, data=data, auth=(username,password))
                 if(response.status_code == 200):
                     create_script(uuid, response.text)
