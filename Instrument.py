@@ -270,7 +270,7 @@ class Instrument(object):
             elif action == 'delete':
                 self.delete_job(event['job']['_id'])
         except Exception as e:
-            print(str(e))
+            self.log_message(module = "job_controller", msg = str(e), level = logging.ERROR)
 
     def delete_job(self, id, disable = False):
         try:
@@ -280,13 +280,13 @@ class Instrument(object):
             self.scheduler.remove_job(id)
             status = "Job "+action+"d: " + id
             level = logging.INFO
-            job_event = json.dumps({'action':action, '_id': id})
-            topic = self._create_topic(topic_type = MQTT_TYPE_JOB)
-            msg_info = self._mqtt_client.publish(topic.value, job_event, qos = self.mqtt_qos, retain = self._mqtt_retain)
         except Exception as e:
             status = str(e) + " Job not "+action+"d: " + id
             level = logging.ERROR
         self.log_message(module = "instrument", msg = status, level = level)
+        job_event = json.dumps({'action':action, '_id': id})
+        topic = self._create_topic(topic_type = MQTT_TYPE_JOB)
+        msg_info = self._mqtt_client.publish(topic.value, job_event, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
 
 
