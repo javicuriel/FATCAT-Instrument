@@ -45,6 +45,34 @@ def set_up_serial(config):
         timeout = eval(config['SERIAL_SETTINGS']['SERIAL_TIMEOUT'])
     )
 
+
+def getInstrumentSerialNumber():
+    # Get Serial
+    nano_td_serial = set_up_serial(config)
+    # Stop data flow
+    nano_td_serial.write("X0000")
+    # Empty buffer
+    while(len(nano_td_serial.readline())):
+        pass
+    # Ask for serial number
+    nano_td_serial.write("N?")
+    # Get serial number
+    uuid = None
+    # Keep reading until serial number response
+    while not uuid:
+        serial_number_response = nano_td_serial.readline().rstrip()
+        try:
+            # Regex for SN
+            uuid = re.match('Serial Number=(.*)', serial_number_response).group(1)
+        except:
+            # Ask for serial number
+            nano_td_serial.write("N?")
+            uuid = None
+    # Start Data flow
+    nano_td_serial.write("X1000")
+    return uuid
+
+
 def main():
     if os.path.exists(config_file):
         print("Installation is already complete")
@@ -69,21 +97,7 @@ def main():
         try:
             val = int(answer)
             if(val == 1):
-                # Get Serial
-                nano_td_serial = set_up_serial(config)
-                # Stop data flow
-                nano_td_serial.write("X0000")
-                while(len(nano_td_serial.readline())):
-                    pass
-                # Ask for serial number
-                nano_td_serial.write("N?")
-                # Get serial number
-                serial_number_response = None
-                while not serial_number_response:
-                    serial_number_response = nano_td_serial.readline().rstrip()
-                nano_td_serial.write("X1000")
-                # Regex for SN
-                uuid = re.match('Serial Number=(.*)', serial_number_response).group(1)
+                uuid = getInstrumentSerialNumber()
                 location = raw_input("Enter location: ")
                 lat = raw_input("Enter latitude: ")
                 long = raw_input("Enter longitude: ")
