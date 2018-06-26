@@ -38,7 +38,7 @@ Enter username for 'API_URL':
 Enter password for 'API_URL':
 ```
 
-*If installation is successful, the application will start immediately and will start logging to `instrument.log`*
+*If installation is successful, the application will start immediately and will start sending, saving messages to `local_store.db` and logging to `instrument.log`*
 
 
 ### **Configuration-file**
@@ -122,9 +122,9 @@ instrument = Instrument(
   )
 ```
 ### Starting the instrument
-*Before starting the instrument you must add all imodules and modes in order for proper functionality.*
+*Before starting the instrument you must add all IModules and modes in order for proper functionality with MQTT messaging. Also, in order for the MQTT Client to connect, a username and token is needed, these are taken from the environment variables `MQTT_UUID` and `IBM_TOKEN`*
 
-Starting the instrument will connect the MQTT client asynchronously and subscribe to the topics to control each imodule. It will then resend all messages lost and start the serial reader with a blocking action creating a new message for each line it reads from serial while saving the messages locally and sending them through `MQTT_TYPE_READING` topic. To start the instrument call `start()`.
+Starting the instrument will connect the MQTT client asynchronously and subscribe to the topics to control each IModule. It will then resend all messages lost and start the serial reader with a blocking action creating a new message for each line it reads from serial while saving the messages locally and sending them through `MQTT_TYPE_READING` topic. To start the instrument call `start()`.
 
 *ej.*
 ```python
@@ -181,5 +181,27 @@ actions = [
 # Use which ever trigger you prefer
 instrument.add_job(name = 'example', actions = actions, trigger = triggerCron)
 ```
+## Files
+#### main.py
+Main script will create a new object Instrument with MQTT and serial settings collected from config.ini. It will also create the stated IModules and modes in the configuration file and will start the Instrument.
 
-Main script will create a new object Instrument with MQTT settings and serial
+#### installer.py
+Installer script will ask for Automatic setup or Manual. If manual is chosen then you must provide MQTT Authentication variables `MQTT_UUID` and `IBM_TOKEN`. If chosen automatic, the script will look for the serial in the config.ini file and ask for serial number of the connected serial device. The serial number will then be set as `MQTT_UUID`, it will then ask for device description variables. After all wariables are set, the script will ask for username and password for the  API where it will request a creation of a new device and if successful if will respond with the newly created token which will be set in the environment as `IBM_TOKEN`. After a successful API call, the program will create a service script with the environment variables and will save to `/etc/systemd/system/` which will in turn make the service auto restart after shutdown or crash and install requirements.
+
+#### Instrument.py
+Declare Instrument class and functions.
+
+#### models.py
+Declare Message, Topic and IModules classes and functions.
+
+#### requirements.txt
+Requirements needed to run the application.
+
+#### config.ini
+Configuration setting for the application.
+
+#### SerialEmulator.py
+Emulator used for testing and development.
+
+#### TestClass.py
+Test class to test application functions.
