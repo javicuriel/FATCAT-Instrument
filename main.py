@@ -20,8 +20,6 @@ def main():
             logging.getLogger(instrument.name).setLevel(logging.DEBUG)
             logging.getLogger(instrument.scheduler.name).setLevel(logging.DEBUG)
 
-        # instrument.run_action('pump', 'flow=10')
-        # instrument.get_jobs()
         instrument.start()
 
 
