@@ -14,16 +14,16 @@ The application has one main class called **Instrument** which has as attributes
 
 ### **Installation**
 1. Clone repository:
-```
+```bash
 $ git clone https://github.com/javicuriel/GAW-Instrument
 ```
 2. Travel to cloned folder:
-```
+```bash
 $ cd GAW-Instrument
 ```
 3. Open config.ini and check **[configuration file](#configuration-file)**.
 4. Run installation script as sudo with serial connected:
-```
+```bash
 $ sudo python installer.py
 ```
 
