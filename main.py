@@ -1,5 +1,4 @@
 from Instrument import Instrument
-from SerialEmulator import SerialEmulator
 from models import IModule
 import serial, os.path, configparser, argparse, logging, time
 import helpers
@@ -47,6 +46,7 @@ def get_instrument_config_file(development):
         serial_emulator = development
     )
     if(development):
+        from SerialEmulator import SerialEmulator
         ser = SerialEmulator()
         instrument._serial = ser
     set_options_config_file(config, instrument)
