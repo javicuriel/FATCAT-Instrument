@@ -21,13 +21,13 @@ $ git clone https://github.com/javicuriel/GAW-Instrument
 ```
 $ cd GAW-Instrument
 ```
-3. Open config.ini and check **[configuration file](#Configuration-file)**.
+3. Open config.ini and check **[configuration file](# onfiguration-file)**.
 4. Run installation script as sudo with serial connected:
 ```
 $ sudo python installer.py
 ```
 
-### **Configuration file**
+### **Configuration-file**
 1. Set MQTT settings like the following example:
 ```ini
 [MQTT_SETTINGS]
@@ -63,7 +63,7 @@ extp:  'on:E1000','off:E0000'
 ```
 4. Set modes and their respective actions with the following format:
 ```ini
-mode_name: 'action_type:module_name:action'
+mode_name: 'action_type_1:module_name_1:action_1'..., 'action_type_n:module_name_n:action_n'
 ```
 ej.
 ```ini
