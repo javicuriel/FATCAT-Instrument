@@ -188,6 +188,9 @@ Main script will create a new object Instrument with MQTT and serial settings co
 #### installer.py
 Installer script will ask for Automatic setup or Manual. If manual is chosen then you must provide MQTT Authentication variables `MQTT_UUID` and `IBM_TOKEN`. If chosen automatic, the script will look for the serial in the config.ini file and ask for serial number of the connected serial device. The serial number will then be set as `MQTT_UUID`, it will then ask for device description variables. After all wariables are set, the script will ask for username and password for the  API where it will request a creation of a new device and if successful if will respond with the newly created token which will be set in the environment as `IBM_TOKEN`. After a successful API call, the program will create a service script with the environment variables and will save to `/etc/systemd/system/` which will in turn make the service auto restart after shutdown or crash and install requirements.
 
+
+![alt text](./extras/installer.png)
+
 #### Instrument.py
 Declare Instrument class and functions.
 
