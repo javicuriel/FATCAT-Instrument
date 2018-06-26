@@ -414,6 +414,7 @@ class Instrument(object):
 
         for i,key in enumerate(keys):
             if i == len(keys)-1:
+                # Last element is status byte
                 dict_data[key] = str(data[i])
             else:
                 dict_data[key] = float(data[i])
