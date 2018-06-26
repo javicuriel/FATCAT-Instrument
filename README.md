@@ -1,18 +1,8 @@
 # Carbon Measurement System
 ## Python Application
-*Application developed in **Python** to work in conjunction with any **MQTT broker** and any **Serial** controlled device.*
+*Application developed in **Python** to work in conjunction with any **MQTT broker** and any **serial** controlled device.*
 
-The application has one main class called **Instrument** which has as attributes multiple classes with the following structure:
-
-* Instrument
-  * MQTT Client
-  * Serial
-  * Scheduler
-  * Logger
-  * IModule *(Can have multiple)*
-
-
-
+The installation is for use with Node.js Control & Visualization Application and IBM Cloud Services.
 
 ### **Installation**
 1. Clone repository:
@@ -80,7 +70,7 @@ SERIAL_TIMEOUT: 1
 ```ini
 module_name:'action:serial_action',...'action_2:serial_action(range)'
 ```
-ej.
+*ej.*
 ```ini
 [MODULES]
 pump:'on:U1000','off:U0000','flow:F0000-F0020'
@@ -94,9 +84,102 @@ extp:'on:E1000','off:E0000'
 ```ini
 mode_name:'action_type_1:module_name_1:action_1', ...
 ```
-ej.
+*ej.*
 ```ini
 [MODES]
 analysis:'module:licor:on','module:extp:off','module:valve:on','module:pump:on'
 sampling:'module:pump:off','module:valve:off', 'module:extp:on','module:licor:off'
 ```
+
+
+## Library Description
+The application has one main class called **Instrument** which has as attributes multiple classes with the following structure:
+
+* Instrument
+  * MQTT Client
+  * Serial
+  * Scheduler
+  * Logger
+  * IModule *(Can have multiple)*
+
+### Configuring the Instrument
+To configure the Instrument, values must me set either by using the main.py script and config.ini file or by passing parameter manually.
+
+*ej.*
+```python
+instrument = Instrument(
+      mqtt_org = 'kbld7d'
+      mqtt_host = 'messaging.internetofthings.ibmcloud.com'
+      mqtt_port = 8883
+      mqtt_keep_alive = 1
+      mqtt_qos = 5
+      serial_port_description = 'NANOTDMRA'
+      serial_baudrate = 115200
+      serial_parity = serial.PARITY_NONE
+      serial_stopbits = serial.STOPBITS_ONE
+      serial_bytesize = serial.EIGHTBITS
+      serial_timeout = 1
+  )
+```
+### Starting the instrument
+*Before starting the instrument you must add all imodules and modes in order for proper functionality.*
+
+Starting the instrument will connect the MQTT client asynchronously and subscribe to the topics to control each imodule. It will then resend all messages lost and start the serial reader with a blocking action creating a new message for each line it reads from serial while saving the messages locally and sending them through `MQTT_TYPE_READING` topic. To start the instrument call `start()`.
+
+*ej.*
+```python
+instrument.start()
+```
+
+### Adding IModules
+IModules are the software representation of the different capabilities the serial controlled device might have. The IModule has two editable attributes, the name and a dictionary of actions. The key of the actions representing the action name and the value representing the serial action. To add a new action call the following function `set_action(action_name, serial_action)`. To add the module to the instrument call `add_module(module)`, this will create a controllable module via MQTT topic designated for each module.
+
+ For example, the device might have a pump with capabilities of turning on, off, or controlling the flow level. Here is an example of how we might configure this setup.
+
+*ej.*
+```python
+module = IModule(name = 'pump')
+module.set_action('on', 'U1000')
+module.set_action('off', 'U0000')
+module.set_action('flow', 'F0000-F0020')
+instrument.add_module(module)
+```
+##### Run action programmatically
+With the module added to the instrument you can now call `run_action(module, action)` to write the serial action to serial device.
+
+*ej.*
+```python
+instrument.run_action('pump', 'on')
+```
+### Adding Modes
+Modes are a set of actions run in order. To add a mode you must set an array of actions and each action with the following format: `[action_type, module, action]`
+
+*ej.*
+```python
+actions = [
+  ['module','pump','off'],
+  ['module','valve','off']
+]
+instrument.add_mode('analysis', actions)
+```
+### Adding Jobs
+Jobs are a set of actions run in order in a certain interval, cron or date. The jobs are stored in a local database so if application crashed it will have a record of missed and missing jobs and will execute accordingly. To add a job to the instrument use the following function `add_job(name, actions, trigger)`
+
+*ej.*
+```python
+triggerCron = ['cron', "2 * * * *"]
+triggerInterval = ['interval', 'minutes', '3']
+triggerDate = ['date', '1979-10-12T00:00:00.00Z']
+```
+
+```python
+actions = [
+  ['module','pump','off'],
+  ['wait','minutes','2'],
+  ['mode','analysis', None],
+]
+# Use which ever trigger you prefer
+instrument.add_job(name = 'example', actions = actions, trigger = triggerCron)
+```
+
+Main script will create a new object Instrument with MQTT settings and serial
