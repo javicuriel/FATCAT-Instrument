@@ -21,7 +21,7 @@ $ git clone https://github.com/javicuriel/GAW-Instrument
 ```
 $ cd GAW-Instrument
 ```
-3. Open config.ini and check **[configuration file](# onfiguration-file)**.
+3. Open config.ini and check **[configuration file](#configuration-file)**.
 4. Run installation script as sudo with serial connected:
 ```
 $ sudo python installer.py
