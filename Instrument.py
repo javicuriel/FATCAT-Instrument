@@ -23,7 +23,7 @@ import numpy as np
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
-
+# Set all MQTT topics
 MQTT_TYPE_READING = 'iot-2/evt/reading'
 MQTT_TYPE_ANALYSIS = 'iot-2/evt/analysis'
 MQTT_TYPE_JOBS = 'iot-2/evt/jobs'
@@ -31,6 +31,7 @@ MQTT_TYPE_JOB = 'iot-2/evt/job'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
 MQTT_TYPE_STATUS = 'status'
 
+# Create DB tables if not exists
 Topic.create_table(True)
 Message.create_table(True)
 
@@ -39,22 +40,11 @@ SingletonInstrument = None
 def memory_info():
     SingletonInstrument.memory_usage()
 
-
 def helper_run_job(event_name, actions):
     # Helper function tu run a job
     SingletonInstrument._run_actions(event_name, actions)
 
-def convert_to_seconds(unit, value):
-    """
-    Converts an number to seconds
-    ej. convert_to_seconds('minutes', 5) => 300
-    """
-    seconds = 1
-    minutes = 60
-    hours = 3600
-    days = 86400
-    return value*eval(unit)
-
+# TODO: Remove this
 class InstrumentLogHandler(object):
     def __init__(self, topic, instrument):
         super(InstrumentLogHandler, self).__init__()
@@ -71,8 +61,6 @@ class InstrumentLogHandler(object):
 
 
 class Instrument(object):
-
-    # __slots__ = 'uuid','mqtt_host','mqtt_port','mqtt_keep_alive','mqtt_qos','_mqtt_publish_topic','serial_port_description','serial_baudrate','serial_parity','serial_stopbits','serial_bytesize','serial_timeout','_mqtt_connected','_mqtt_clean_session','_mqtt_retain','_mqtt_messages_lost','_mqtt_client','_serial','_imodules','date_format'
 
     def __init__(self, date_format = '%Y-%m-%d %H:%M:%S', *args, **kwargs ):
         super(Instrument, self).__init__()
@@ -485,7 +473,7 @@ class Instrument(object):
                 self.run_action(name, value)
             elif action_type == 'wait':
                 self.log_message(module = self.name, msg = "Waiting "+ value + " " + name)
-                time.sleep(convert_to_seconds(name, int(value)))
+                time.sleep(helpers.convert_to_seconds(name, int(value)))
             elif action_type == 'analyse':
                 self.calculate_analysis(name)
             else:

@@ -1,6 +1,17 @@
 import re
 from apscheduler.triggers.cron import CronTrigger
 
+def convert_to_seconds(unit, value):
+    """
+    Converts an number to seconds
+    ej. convert_to_seconds('minutes', 5) => 300
+    """
+    seconds = 1
+    minutes = 60
+    hours = 3600
+    days = 86400
+    return value*eval(unit)
+
 def getTriggerArgs(trigger_args):
     # Trigger examples:
     # ['cron', '* * * * *']
