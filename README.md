@@ -1,4 +1,4 @@
-# Carbon Measurement System
+# FATCAT Control, Monitor & Visualization System
 ## Python Application
 *Application developed in **Python** to work in conjunction with any **MQTT broker** and any **serial** controlled device.*
 
@@ -7,11 +7,11 @@ The installation is for use with Node.js Control & Visualization Application and
 ### **Installation**
 1. Clone repository:
 ```bash
-$ git clone https://github.com/javicuriel/GAW-Instrument
+$ git clone https://github.com/javicuriel/FATCAT-Instrument
 ```
 2. Travel to cloned folder:
 ```bash
-$ cd GAW-Instrument
+$ cd FATCAT-Instrument
 ```
 3. Open config.ini and check **[configuration file](#configuration-file)**.
 4. Run installation script as sudo with serial device connected:
