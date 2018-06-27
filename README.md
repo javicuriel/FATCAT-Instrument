@@ -14,7 +14,7 @@ $ git clone https://github.com/javicuriel/GAW-Instrument
 $ cd GAW-Instrument
 ```
 3. Open config.ini and check **[configuration file](#configuration-file)**.
-4. Run installation script as sudo with serial connected:
+4. Run installation script as sudo with serial device connected:
 ```bash
 $ sudo python installer.py
 ```
@@ -38,7 +38,7 @@ Enter username for 'API_URL':
 Enter password for 'API_URL':
 ```
 
-*If installation is successful, the application will start immediately and will start sending, saving messages to `local_store.db` and logging to `instrument.log`*
+*If installation is successful, the application will start immediately and will start sending and saving messages to `local_store.db` while logging to `instrument.log`*
 
 
 ### **Configuration-file**
@@ -91,6 +91,8 @@ analysis:'module:licor:on','module:extp:off','module:valve:on','module:pump:on'
 sampling:'module:pump:off','module:valve:off', 'module:extp:on','module:licor:off'
 ```
 
+<!-- For PDF better formatting -->
+<br/><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/>
 
 ## Library Description
 The application has one main class called **Instrument** which has as attributes multiple classes with the following structure:
@@ -101,6 +103,11 @@ The application has one main class called **Instrument** which has as attributes
   * Scheduler
   * Logger
   * IModule *(Can have multiple)*
+
+<br/><br/><br/>
+![text](./extras/class_diagram.png)
+
+<br/><br/><br/>
 
 ### Configuring the Instrument
 To configure the Instrument, values must me set either by using the main.py script and config.ini file or by passing parameter manually.
@@ -142,6 +149,8 @@ module = IModule(name = 'pump')
 module.set_action('on', 'U1000')
 module.set_action('off', 'U0000')
 module.set_action('flow', 'F0000-F0020')
+```
+```python
 instrument.add_module(module)
 ```
 ##### Run action programmatically
@@ -189,7 +198,7 @@ Main script will create a new object Instrument with MQTT and serial settings co
 Installer script will ask for Automatic setup or Manual. If manual is chosen then you must provide MQTT Authentication variables `MQTT_UUID` and `IBM_TOKEN`. If chosen automatic, the script will look for the serial in the config.ini file and ask for serial number of the connected serial device. The serial number will then be set as `MQTT_UUID`, it will then ask for device description variables. After all wariables are set, the script will ask for username and password for the  API where it will request a creation of a new device and if successful if will respond with the newly created token which will be set in the environment as `IBM_TOKEN`. After a successful API call, the program will create a service script with the environment variables and will save to `/etc/systemd/system/` which will in turn make the service auto restart after shutdown or crash and install requirements.
 
 
-![alt text](./extras/installer.png)
+![text](./extras/installer.png)
 
 #### Instrument.py
 Declare Instrument class and functions.
