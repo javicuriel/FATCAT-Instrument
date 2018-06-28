@@ -98,6 +98,7 @@ def main():
             # Get Serial
             nano_td_serial = set_up_serial(config)
             uuid = getInstrumentSerialNumber(nano_td_serial)
+            print("UUID found: "+ uuid)
             location = raw_input("Enter location: ")
             lat = raw_input("Enter latitude: ")
             long = raw_input("Enter longitude: ")
