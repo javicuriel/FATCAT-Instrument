@@ -92,7 +92,7 @@ sampling:'module:pump:off','module:valve:off', 'module:extp:on','module:licor:of
 ```
 
 <!-- For PDF better formatting -->
-<!-- <br/><br/><br/><br/><br/><br/><br/><br/><br/><br/><br/> -->
+<!-- <br/><br/><br/><br/><br/><br/><br/><br/><br/> -->
 
 ## Library Description
 The application has one main class called **Instrument** which has as attributes multiple classes with the following structure:
