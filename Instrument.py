@@ -536,10 +536,8 @@ class Instrument(object):
                 elif action_type == 'module':
                     values = action.split('=')
                     self._imodules[module].validate_action(values[0])
-                else:
-                    int(module)
-                    if action_type != 'analyse':
-                        raise
+                elif action_type != 'analyse':
+                    raise
         except Exception as e:
             raise ValueError("Invalid actions!")
 
