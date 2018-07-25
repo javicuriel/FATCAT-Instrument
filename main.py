@@ -40,6 +40,9 @@ def get_instrument_config_file(development):
         serial_stopbits = eval(config['SERIAL_SETTINGS']['SERIAL_STOPBITS']),
         serial_bytesize = eval(config['SERIAL_SETTINGS']['SERIAL_BYTESIZE']),
         serial_timeout = eval(config['SERIAL_SETTINGS']['SERIAL_TIMEOUT']),
+
+        storage_location = eval(config['GENERAL_SETTINGS']['STORAGE_LOCATION']),
+
         # Test serial emulator
         serial_emulator = development
     )

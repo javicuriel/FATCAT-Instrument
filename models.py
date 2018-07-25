@@ -5,7 +5,15 @@ import peewee as pw
 import datetime
 import json
 
-db = pw.SqliteDatabase('local_store.db')
+# import configparser
+#
+# # Getting values from the configuration file
+# config = configparser.ConfigParser()
+# config.read('config.ini')
+# storage_location = eval(config['GENERAL_SETTINGS']['STORAGE_LOCATION'])
+
+# db = pw.SqliteDatabase(storage_location+'/local_store.db')
+db = pw.SqliteDatabase(None)
 
 # Base model implemented for use of the same database for all models
 class BaseModel(pw.Model):
@@ -142,3 +150,9 @@ class IModule(object):
 
     def __eq__(self, other):
         return self.name == other.name
+
+def init_models(storage_location):
+    # Create DB tables if not exists
+    BaseModel._meta.database.init(storage_location+'/local_store.db')
+    Topic.create_table(True)
+    Message.create_table(True)

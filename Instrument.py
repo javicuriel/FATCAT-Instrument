@@ -5,6 +5,7 @@
 from models import Topic
 from models import Message
 from models import IModule
+from models import init_models
 from uuid import getnode as get_mac
 import paho.mqtt.client as mqtt
 import serial
@@ -31,9 +32,6 @@ MQTT_TYPE_JOB = 'iot-2/evt/job'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
 MQTT_TYPE_STATUS = 'status'
 
-# Create DB tables if not exists
-Topic.create_table(True)
-Message.create_table(True)
 
 SingletonInstrument = None
 
@@ -76,8 +74,6 @@ class Instrument(object):
         self.mqtt_port = kwargs.get('mqtt_port')
         self.mqtt_keep_alive = kwargs.get('mqtt_keep_alive')
         self.mqtt_qos = kwargs.get('mqtt_qos')
-        self.mqtt_publish_topic = ''
-        self.mqtt_analysis_topic = self._create_topic(topic_type = MQTT_TYPE_ANALYSIS)
 
         self.serial_port_description = kwargs.get('serial_port_description')
         self.serial_baudrate = kwargs.get('serial_baudrate')
@@ -85,6 +81,12 @@ class Instrument(object):
         self.serial_stopbits = kwargs.get('serial_stopbits')
         self.serial_bytesize = kwargs.get('serial_bytesize')
         self.serial_timeout = kwargs.get('serial_timeout')
+
+        self.storage_location = kwargs.get('storage_location')
+        init_models(self.storage_location)
+
+        self.mqtt_publish_topic = ''
+        self.mqtt_analysis_topic = self._create_topic(topic_type = MQTT_TYPE_ANALYSIS)
 
         self._mqtt_connected = False
         self._mqtt_clean_session = False
@@ -131,7 +133,7 @@ class Instrument(object):
         # Creates scheduler with local database and logger
         # returns scheduler
         jobstores = {
-            'default': SQLAlchemyJobStore(url='sqlite:///jobs.db')
+            'default': SQLAlchemyJobStore(url='sqlite:///'+self.storage_location+'/jobs.db')
         }
         scheduler = BackgroundScheduler(jobstores = jobstores)
         scheduler.name = 'apscheduler'
