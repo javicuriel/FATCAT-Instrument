@@ -438,8 +438,8 @@ class Instrument(object):
 
     def calculate_analysis(self, countdown):
         try:
-            # TODO: Publish beta analysis 'iot-2/evt/beta_analysis'
-            self._mqtt_client.publish('iot-2/evt/beta_analysis/fmt/json', "{timestamp: "+self._get_timestamp()+"}", qos = self.mqtt_qos, retain = self._mqtt_retain)
+            # TODO: REMOVE beta analysis 
+            self._mqtt_client.publish('iot-2/evt/beta_analysis/fmt/json', '{"timestamp": "'+self._get_timestamp()+'"}', qos = self.mqtt_qos, retain = self._mqtt_retain)
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
