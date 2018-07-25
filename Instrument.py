@@ -436,14 +436,15 @@ class Instrument(object):
         msg_info = self._mqtt_client.publish(topic.value, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
         return json_jobs
 
-    def calculate_analysis(self, countdown):
+    def calculate_analysis(self):
         try:
-            # TODO: REMOVE beta analysis 
+            # TODO: REMOVE beta analysis
             self._mqtt_client.publish('iot-2/evt/beta_analysis/fmt/json', '{"timestamp": "'+self._get_timestamp()+'"}', qos = self.mqtt_qos, retain = self._mqtt_retain)
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
-            t1 = Message.select().where(Message.sample == True and Message.countdown == int(countdown)).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t_help = Message.select().where(Message.sample == True and Message.countdown != 0).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            t1 = Message.select().where(Message.sample == True and Message.timestamp <= t_help and Message.countdown == 0).order_by(Message.timestamp.desc()).limit(1).get().timestamp
             t0 = t1 - datetime.timedelta(seconds = 5)
             t2 = t1 + datetime.timedelta(seconds = 630)
             baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where((Message.sample == True)&(Message.timestamp >= t0)&(Message.timestamp <= t1)).get().avg
@@ -477,7 +478,7 @@ class Instrument(object):
                 self.log_message(module = self.name, msg = "Waiting "+ value + " " + name)
                 time.sleep(helpers.convert_to_seconds(name, int(value)))
             elif action_type == 'analyse':
-                self.calculate_analysis(name)
+                self.calculate_analysis()
             else:
                 raise ValueError("Invalid action type: " + action_type)
 
