@@ -438,6 +438,8 @@ class Instrument(object):
 
     def calculate_analysis(self, countdown):
         try:
+            # TODO: Publish beta analysis 'iot-2/evt/beta_analysis'
+            self._mqtt_client.publish('iot-2/evt/beta_analysis/fmt/json', "{timestamp: "+self._get_timestamp()+"}", qos = self.mqtt_qos, retain = self._mqtt_retain)
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
@@ -582,7 +584,7 @@ class Instrument(object):
     def _get_timestamp(self):
         # Return timestamp with user set format
         # return datetime.datetime.now().strftime(self.date_format)
-        return datetime.datetime.utcnow().isoformat()
+        return datetime.datetime.utcnow().isoformat() + 'Z'
 
     def memory_usage(self):
         process = psutil.Process(os.getpid())
