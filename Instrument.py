@@ -446,7 +446,8 @@ class Instrument(object):
             co2 = []
             runtime = []
             t_help = Message.select().where(Message.sample == True and Message.countdown != 0).order_by(Message.timestamp.desc()).limit(1).get().timestamp
-            t1 = Message.select().where(Message.sample == True and Message.timestamp <= t_help and Message.countdown == 0).order_by(Message.timestamp.desc()).limit(1).get().timestamp
+            # And does not work with dates so use multiple wheres
+            t1 = Message.select().where(Message.sample == True).where(Message.timestamp < t_help).where(Message.countdown == 0).order_by(Message.timestamp.desc()).limit(1).get().timestamp
             t0 = t1 - datetime.timedelta(seconds = 5)
             t2 = t1 + datetime.timedelta(seconds = 630)
             baseline = Message.select(pw.fn.AVG(Message.co2).alias('avg')).where((Message.sample == True)&(Message.timestamp >= t0)&(Message.timestamp <= t1)).get().avg
