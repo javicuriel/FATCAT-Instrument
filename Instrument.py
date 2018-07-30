@@ -449,13 +449,21 @@ class Instrument(object):
         msg_info = self._mqtt_client.publish(topic.value, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
         return json_jobs
 
+    def publish_analysis_time(self):
+        try:
+            t1 = OvenLog.select().order_by(OvenLog.timestamp.desc()).limit(1).get().timestamp
+            t1 = t1.isoformat() + 'Z'
+            self._mqtt_client.publish(self.mqtt_analysis_topic.value, '{"timestamp": "'+t1+'"}', qos = self.mqtt_qos, retain = self._mqtt_retain)
+        except Exception as e:
+            self.log_message(module = 'analysis', msg = "Analysis not successful: " + str(e), level = logging.ERROR)
+
     def calculate_analysis(self):
         try:
             # TODO: REMOVE beta analysis
             t1_beta = OvenLog.select().order_by(OvenLog.timestamp.desc()).limit(1).get().timestamp
             t1_beta = t1_beta.isoformat() + 'Z'
             self._mqtt_client.publish('iot-2/evt/beta_analysis/fmt/json', '{"timestamp": "'+t1_beta+'"}', qos = self.mqtt_qos, retain = self._mqtt_retain)
-            
+
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
@@ -495,7 +503,7 @@ class Instrument(object):
                 self.log_message(module = self.name, msg = "Waiting "+ value + " " + name)
                 time.sleep(helpers.convert_to_seconds(name, int(value)))
             elif action_type == 'analyse':
-                self.calculate_analysis()
+                self.publish_analysis_time()
             else:
                 raise ValueError("Invalid action type: " + action_type)
 
