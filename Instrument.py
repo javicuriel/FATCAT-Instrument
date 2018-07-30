@@ -456,7 +456,7 @@ class Instrument(object):
         try:
             t1 = OvenLog.select().order_by(OvenLog.timestamp.desc()).limit(1).get().timestamp
             t1 = t1.isoformat() + 'Z'
-            timezone = strftime("%Z", gmtime())
+            timezone = strftime("%z", gmtime())
             self._mqtt_client.publish(self.mqtt_analysis_topic.value, '{"timestamp": "'+t1+'", "timezone": "'+timezone+'"}', qos = self.mqtt_qos, retain = self._mqtt_retain)
             self.log_message(module = 'analysis', msg = "Analysis timestamp sent: " + t1, level = logging.INFO)
         except Exception as e:
