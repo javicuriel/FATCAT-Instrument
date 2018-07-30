@@ -5,6 +5,7 @@
 from models import Topic
 from models import Message
 from models import IModule
+from models import OvenLog
 from models import init_models
 from uuid import getnode as get_mac
 import paho.mqtt.client as mqtt
@@ -115,6 +116,9 @@ class Instrument(object):
 
         self._modes = {}
         SingletonInstrument = self
+
+        self._countdown_current = 0
+        self._countdown_last = 0
 
 
 
@@ -409,6 +413,13 @@ class Instrument(object):
             else:
                 dict_data[key] = float(data[i])
 
+        # Log to database to get analysis times
+        self._countdown_current = dict_data['countdown']
+        if(self._countdown_last == 0 and self._countdown_current != 0):
+            OvenLog.create(timestamp = timestamp)
+            self.log_message(module = "oven", msg = "Oven was turned on! Countdown = " + str(self._countdown_current), level = logging.INFO)
+
+        self._countdown_last = dict_data['countdown']
 
         return dict_data
 
@@ -441,7 +452,10 @@ class Instrument(object):
     def calculate_analysis(self):
         try:
             # TODO: REMOVE beta analysis
-            self._mqtt_client.publish('iot-2/evt/beta_analysis/fmt/json', '{"timestamp": "'+self._get_timestamp()+'"}', qos = self.mqtt_qos, retain = self._mqtt_retain)
+            t1_beta = OvenLog.select().order_by(OvenLog.timestamp.desc()).limit(1).get().timestamp
+            t1_beta = t1_beta.isoformat() + 'Z'
+            self._mqtt_client.publish('iot-2/evt/beta_analysis/fmt/json', '{"timestamp": "'+t1_beta+'"}', qos = self.mqtt_qos, retain = self._mqtt_retain)
+            
             ppmtoug = 12.01/22.4
             co2 = []
             runtime = []
