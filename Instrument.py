@@ -298,6 +298,8 @@ class Instrument(object):
             self.log_message(module = 'mqttclient', msg = "MQTT Message: "+module_name+ ":"+ action, level = logging.INFO)
             if(module_name in self._modes):
                 self.run_mode(module_name)
+            elif(module_name == 'analyse'):
+                self.publish_analysis_time()
             else:
                 self.run_action(module_name, action)
 
@@ -310,7 +312,7 @@ class Instrument(object):
         # reconnect then subscriptions will be renewed.
         self._mqtt_subscribe(self._imodules)
         self._mqtt_subscribe(self._modes)
-        self._mqtt_subscribe({'job'})
+        self._mqtt_subscribe({'job','analyse'})
 
     def _mqtt_subscribe(self, topics):
         for t in topics:
