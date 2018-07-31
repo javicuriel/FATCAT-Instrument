@@ -28,7 +28,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 # Set all MQTT topics
 MQTT_TYPE_READING = 'iot-2/evt/reading'
-MQTT_TYPE_ANALYSIS = 'iot-2/evt/analysis'
+MQTT_TYPE_ANALYSIS = 'iot-2/evt/analyse'
 MQTT_TYPE_JOBS = 'iot-2/evt/jobs'
 MQTT_TYPE_JOB = 'iot-2/evt/job'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
@@ -376,16 +376,19 @@ class Instrument(object):
         # {id}/{topic_type}/{t}
         # BEFORE
         # final_value = self.uuid + '/' + topic_type
-        final_value = topic_type
-        if t:
-            final_value += '/' + t
-        if topic_type == MQTT_TYPE_MODULE and t != '#':
-            final_value += '/fmt/txt'
-        elif t != '#':
-            final_value += '/fmt/json'
-        # If topic was already in database the get if not create
-        topic, _ = Topic.get_or_create(value = final_value)
-        return topic
+        try:
+            final_value = topic_type
+            if t:
+                final_value += '/' + t
+            if topic_type == MQTT_TYPE_MODULE and t != '#':
+                final_value += '/fmt/txt'
+            elif t != '#':
+                final_value += '/fmt/json'
+            # If topic was already in database the get if not create
+            topic, _ = Topic.get_or_create(value = final_value)
+            return topic
+        except Exception as e:
+            self.log_message(module = "topic", msg = str(e), level = logging.CRITICAL)
 
     @property
     def mqtt_publish_topic(self):
