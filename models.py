@@ -18,7 +18,6 @@ class Topic(BaseModel):
 
 
 class Message(BaseModel):
-    topic = pw.ForeignKeyField(Topic)
     sent = pw.BooleanField(default = False)
     timestamp = pw.DateTimeField(default=datetime.datetime.now)
 
@@ -41,12 +40,11 @@ class Message(BaseModel):
     countdown = pw.FloatField(null = True)
     statusbyte = pw.CharField(null = True)
 
-    total_carbon = pw.FloatField(null = True)
-    max_temp = pw.FloatField(null = True)
-    baseline = pw.FloatField(null = True)
+    timezone = pw.FloatField(null = True)
+
 
     def to_json(self):
-        omit = {'id','sent','topic','sample'}
+        omit = {'id','sent','sample'}
         data = {x: self.__data__[x] for x in self.__data__ if x not in omit and self.__data__[x] != None}
         data['timestamp'] = data['timestamp'].isoformat() + 'Z'
         json_data = json.dumps(data)

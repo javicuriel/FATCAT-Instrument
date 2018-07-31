@@ -54,7 +54,7 @@ class InstrumentLogHandler(object):
     def write(self, string):
         sys.stdout.write(string)
         # if self.instrument._mqtt_connected and self.instrument._log_info['send_mqtt']:
-        #     self.instrument._mqtt_client.publish(topic = self._topic.value, payload = string, qos = self.instrument.mqtt_qos, retain = self.instrument._mqtt_retain)
+        #     self.instrument._mqtt_client.publish(topic = self._topic, payload = string, qos = self.instrument.mqtt_qos, retain = self.instrument._mqtt_retain)
 
     def flush(self):
         sys.stdout.flush()
@@ -87,8 +87,9 @@ class Instrument(object):
         self.storage_location = kwargs.get('storage_location')
         init_models(self.storage_location)
 
-        self.mqtt_publish_topic = ''
-        self.mqtt_analysis_topic = self._create_topic(topic_type = MQTT_TYPE_ANALYSIS)
+        # self.mqtt_publish_topic = ''
+        self.mqtt_publish_topic = self._get_topic(topic_type = MQTT_TYPE_READING)
+        self.mqtt_analysis_topic = self._get_topic(topic_type = MQTT_TYPE_ANALYSIS)
 
         self._mqtt_connected = False
         self._mqtt_clean_session = False
@@ -118,6 +119,7 @@ class Instrument(object):
         self._modes = {}
         SingletonInstrument = self
 
+        self.timezone = strftime("%z", gmtime())
         self._countdown_current = 0
         self._countdown_last = 0
 
@@ -153,7 +155,7 @@ class Instrument(object):
         logger.setLevel(logging.INFO)
 
         # Set log MQTT topic
-        topic = self._create_topic(topic_type = MQTT_TYPE_STATUS)
+        topic = self._get_topic(topic_type = MQTT_TYPE_STATUS)
         # Create MQTT-console handler
         mqtth = InstrumentLogHandler(topic, self)
 
@@ -216,8 +218,8 @@ class Instrument(object):
         client.on_disconnect = self._mqtt_on_disconnect
 
         # Callback is global because client will only subscribe to current modules in function on_connect
-        all_module_topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t = '#')
-        client.message_callback_add(all_module_topic.value, self._on_module_message)
+        all_module_topic = self._get_topic(topic_type = MQTT_TYPE_MODULE, t = '#')
+        client.message_callback_add(all_module_topic, self._on_module_message)
 
         # Set max messages stored in memory
         client.max_queued_messages_set(self._mqtt_max_queue)
@@ -280,8 +282,8 @@ class Instrument(object):
             level = logging.ERROR
         self.log_message(module = "instrument", msg = status, level = level)
         job_event = json.dumps({'action':action, '_id': id})
-        topic = self._create_topic(topic_type = MQTT_TYPE_JOB)
-        msg_info = self._mqtt_client.publish(topic.value, job_event, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        topic = self._get_topic(topic_type = MQTT_TYPE_JOB)
+        msg_info = self._mqtt_client.publish(topic, job_event, qos = self.mqtt_qos, retain = self._mqtt_retain)
 
 
 
@@ -317,9 +319,9 @@ class Instrument(object):
 
     def _mqtt_subscribe(self, topics):
         for t in topics:
-            topic = self._create_topic(topic_type = MQTT_TYPE_MODULE, t=t)
-            self._mqtt_client.subscribe(topic.value, self.mqtt_qos)
-            self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic.value, level = logging.DEBUG)
+            topic = self._get_topic(topic_type = MQTT_TYPE_MODULE, t=t)
+            self._mqtt_client.subscribe(topic, self.mqtt_qos)
+            self.log_message(module = 'mqttclient', msg = 'Subscribe to '+ topic, level = logging.DEBUG)
 
     def _mqtt_on_disconnect(self, *args, **kwargs):
         # Set _mqtt_connected flag to false and log it
@@ -349,9 +351,16 @@ class Instrument(object):
                 self._mqtt_resend_from_db()
 
     def _mqtt_publish(self, msg):
+        # Get topic to send message
+        if(msg.sample == True):
+            topic = self.mqtt_publish_topic
+        else:
+            topic = self.mqtt_analysis_topic
+
         # Publish the message to the server and store result in msg_info
         data = msg.to_json()
-        msg_info = self._mqtt_client.publish(msg.topic.value, data, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        msg_info = self._mqtt_client.publish(topic, data, qos = self.mqtt_qos, retain = self._mqtt_retain)
+
 
         # If sent is successful, set sent flag to true
         if msg_info.rc == mqtt.MQTT_ERR_SUCCESS:
@@ -370,6 +379,16 @@ class Instrument(object):
         msg.save()
         # return True or false
         return msg.sent
+
+    def _get_topic(self, topic_type, t = ''):
+        final_value = topic_type
+        if t:
+            final_value += '/' + t
+        if topic_type == MQTT_TYPE_MODULE and t != '#':
+            final_value += '/fmt/txt'
+        elif t != '#':
+            final_value += '/fmt/json'
+        return final_value
 
     def _create_topic(self, topic_type, t = ''):
         # Creates topic with format:
@@ -390,13 +409,6 @@ class Instrument(object):
         except Exception as e:
             self.log_message(module = "topic", msg = str(e), level = logging.CRITICAL)
 
-    @property
-    def mqtt_publish_topic(self):
-        return self._mqtt_publish_topic
-
-    @mqtt_publish_topic.setter
-    def mqtt_publish_topic(self, value):
-        self._mqtt_publish_topic = self._create_topic(topic_type = MQTT_TYPE_READING)
 
     def _read_data(self):
         # Read line from serial and remove \n character
@@ -451,16 +463,15 @@ class Instrument(object):
             id, args = job.args
             jobs['jobs'].append({'id':id, 'trigger': str(job.trigger), 'actions':args})
         json_jobs = json.dumps(jobs)
-        topic = self._create_topic(topic_type = MQTT_TYPE_JOBS)
-        msg_info = self._mqtt_client.publish(topic.value, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        topic = self._get_topic(topic_type = MQTT_TYPE_JOBS)
+        msg_info = self._mqtt_client.publish(topic, json_jobs, qos = self.mqtt_qos, retain = self._mqtt_retain)
         return json_jobs
 
     def publish_analysis_time(self):
         try:
             t1 = OvenLog.select().order_by(OvenLog.timestamp.desc()).limit(1).get().timestamp
-            t1 = t1.isoformat() + 'Z'
-            timezone = strftime("%z", gmtime())
-            self._mqtt_client.publish(self.mqtt_analysis_topic.value, '{"timestamp": "'+t1+'", "timezone": "'+timezone+'"}', qos = self.mqtt_qos, retain = self._mqtt_retain)
+            message = Message(topic = self.mqtt_analysis_topic,timestamp = t1, timezone= self.timezone ,sample = False)
+            self._mqtt_publish(message)
             self.log_message(module = 'analysis', msg = "Analysis timestamp sent: " + t1, level = logging.INFO)
         except Exception as e:
             self.log_message(module = 'analysis', msg = "Analysis not successful: " + str(e), level = logging.ERROR)
@@ -553,8 +564,8 @@ class Instrument(object):
             message = json.dumps({'action': 'error', '_id':name, 'error': str(e)})
             status = str(e) + " Job not added: " + name
             level = logging.ERROR
-        topic = self._create_topic(topic_type = MQTT_TYPE_JOB)
-        self._mqtt_client.publish(topic.value, message, qos = self.mqtt_qos, retain = self._mqtt_retain)
+        topic = self._get_topic(topic_type = MQTT_TYPE_JOB)
+        self._mqtt_client.publish(topic, message, qos = self.mqtt_qos, retain = self._mqtt_retain)
         self.log_message(module = "instrument", msg = status, level = level)
 
 
@@ -610,7 +621,7 @@ class Instrument(object):
         self._mqtt_resend_from_db()
         self.scheduler.start()
         if not test:
-            self.log_message(module = self.name, msg = "Starting reader on topic = "+ self.mqtt_publish_topic.value)
+            self.log_message(module = self.name, msg = "Starting reader on topic = "+ self.mqtt_publish_topic)
             self.start_reader()
 
     def _get_timestamp(self):
