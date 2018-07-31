@@ -470,9 +470,9 @@ class Instrument(object):
     def publish_analysis_time(self):
         try:
             t1 = OvenLog.select().order_by(OvenLog.timestamp.desc()).limit(1).get().timestamp
-            message = Message(topic = self.mqtt_analysis_topic,timestamp = t1, timezone= self.timezone ,sample = False)
+            message = Message(topic = self.mqtt_analysis_topic, timestamp = t1, timezone= self.timezone ,sample = False)
             self._mqtt_publish(message)
-            self.log_message(module = 'analysis', msg = "Analysis timestamp sent: " + t1, level = logging.INFO)
+            self.log_message(module = 'analysis', msg = "Analysis timestamp sent", level = logging.INFO)
         except Exception as e:
             self.log_message(module = 'analysis', msg = "Analysis not successful: " + str(e), level = logging.ERROR)
 
