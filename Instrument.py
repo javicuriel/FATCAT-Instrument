@@ -28,7 +28,7 @@ from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 
 # Set all MQTT topics
 MQTT_TYPE_READING = 'iot-2/evt/reading'
-MQTT_TYPE_ANALYSIS = 'iot-2/evt/analyse'
+MQTT_TYPE_ANALYSIS = 'iot-2/evt/analysis'
 MQTT_TYPE_JOBS = 'iot-2/evt/jobs'
 MQTT_TYPE_JOB = 'iot-2/evt/job'
 MQTT_TYPE_MODULE = 'iot-2/cmd'
